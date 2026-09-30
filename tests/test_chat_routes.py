@@ -110,3 +110,21 @@ def test_chat_history_and_reset(client):
     reset_res = client.post("/api/chat/reset", json={"session_id": "history-test"})
     assert reset_res.status_code == 200
     assert reset_res.get_json()["success"] is True
+
+
+def test_chat_sessions_crud(client):
+    """Test session creation, listing, and deletion."""
+    create_res = client.post("/api/chat/sessions", json={"title": "Biology Notes"})
+    assert create_res.status_code == 201
+    new_sess = create_res.get_json()["session"]
+    sess_id = new_sess["session_id"]
+    assert new_sess["title"] == "Biology Notes"
+
+    list_res = client.get("/api/chat/sessions")
+    assert list_res.status_code == 200
+    sessions = list_res.get_json()["sessions"]
+    assert any(s["session_id"] == sess_id for s in sessions)
+
+    del_res = client.delete(f"/api/chat/sessions/{sess_id}")
+    assert del_res.status_code == 200
+    assert del_res.get_json()["success"] is True

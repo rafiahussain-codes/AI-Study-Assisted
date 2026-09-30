@@ -1,542 +1,1066 @@
 /**
- * Student Score Predictor - Client-side Dashboard Logic
- * Phase 9: AI / LLM Integration
- *
- * Responsibilities:
- * - Capture and validate student academic details from the form
- * - Dispatch POST /api/predict to obtain real ML predictions
- * - Update the Latest Prediction card and animated score bar
- * - Fetch and display aggregate statistics from GET /api/statistics
- * - Fetch and render prediction history from GET /api/predictions
- * - Provide on-demand "Explain & Get Study Advice" via POST /api/ai-advice
- * - Maintain separation of responsibilities:
- *   * ML Model: Numerical score prediction
- *   * LLM: Prediction explanation and personalized study recommendations
- * - Safely render all text (textContent) without raw HTML injection
+ * EDVORA — AI Study Assistant
+ * Modern Dark UI, Document Understanding, Vector RAG & Interactive Tutoring
  */
 
 document.addEventListener("DOMContentLoaded", () => {
     // ========================================================================
-    // 1. DOM Element Selections
+    // DOM Element Selectors
     // ========================================================================
 
-    // Prediction Form
-    const form = document.getElementById("predictionForm");
-    const studyHoursInput = document.getElementById("study_hours");
-    const previousScoreInput = document.getElementById("previous_score");
-    const attendanceInput = document.getElementById("attendance");
-    const assignmentScoreInput = document.getElementById("assignment_score");
+    // Navigation & Workspace
+    const sidebar = document.getElementById("sidebar");
+    const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+    const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+    const sidebarCloseBtn = document.getElementById("sidebarCloseBtn");
+    const newChatBtn = document.getElementById("newChatBtn");
+    const resetCurrentChatBtn = document.getElementById("resetCurrentChatBtn");
+    const currentSessionTitle = document.getElementById("currentSessionTitle");
+    const topbarRagStatus = document.getElementById("topbarRagStatus");
+    const topbarRagText = document.getElementById("topbarRagText");
+    const modelStatusLabel = document.getElementById("modelStatusLabel");
+    const engineStatusPill = document.getElementById("engineStatusPill");
 
-    // Form Alert & Submit Controls
-    const errorArea = document.getElementById("errorArea");
-    const errorMessage = document.getElementById("errorMessage");
-    const predictButton = document.getElementById("predictButton");
-    const btnSpinner = predictButton.querySelector(".btn-spinner");
-    const btnText = document.getElementById("btnText");
+    // Right Context Panel (Inspector)
+    const contextPanel = document.getElementById("contextPanel");
+    const inspectorBackdrop = document.getElementById("inspectorBackdrop");
+    const toggleInspectorBtn = document.getElementById("toggleInspectorBtn");
+    const closeInspectorBtn = document.getElementById("closeInspectorBtn");
+    const inspectorDocsCount = document.getElementById("inspectorDocsCount");
+    const inspectorDocsList = document.getElementById("inspectorDocsList");
+    const sourcesCardList = document.getElementById("sourcesCardList");
+    const sourcesEmptyState = document.getElementById("sourcesEmptyState");
+    const inspectorUploadBtn = document.getElementById("inspectorUploadBtn");
 
-    // Latest Prediction Card Elements
-    const resultArea = document.getElementById("resultArea");
-    const resultPlaceholder = document.getElementById("resultPlaceholder");
-    const scoreDisplay = document.getElementById("scoreDisplay");
-    const scoreValue = document.getElementById("scoreValue");
-    const scoreBarWrapper = document.getElementById("scoreBarWrapper");
-    const scoreProgressBar = document.getElementById("scoreProgressBar");
-
-    // Phase 9: AI Study Advice Elements
-    const getAiAdviceBtn = document.getElementById("getAiAdviceBtn");
-    const aiBtnSpinner = document.getElementById("aiBtnSpinner");
-    const aiBtnText = document.getElementById("aiBtnText");
-    const aiAdviceArea = document.getElementById("aiAdviceArea");
-    const aiAdviceText = document.getElementById("aiAdviceText");
-    const aiAdviceError = document.getElementById("aiAdviceError");
-    const aiModelBadge = document.getElementById("aiModelBadge");
-
-    // Phase 9 Enhancement: AI Study Assistant Chatbot & Notes RAG Elements
-    const chatSection = document.getElementById("chatSection");
-    const chatModelIndicator = document.getElementById("chatModelIndicator");
-    const chatResetBtn = document.getElementById("chatResetBtn");
-    const notesFileInput = document.getElementById("notesFileInput");
+    // Upload Drawer & Dropzone
+    const uploadDrawer = document.getElementById("uploadDrawer");
+    const toggleUploadZoneBtn = document.getElementById("toggleUploadZoneBtn");
+    const closeUploadDrawerBtn = document.getElementById("closeUploadDrawerBtn");
     const notesDropzone = document.getElementById("notesDropzone");
-    const uploadProgress = document.getElementById("uploadProgress");
+    const notesFileInput = document.getElementById("notesFileInput");
+    const dropzoneIdle = document.getElementById("dropzoneIdle");
+    const dropzoneProcessing = document.getElementById("dropzoneProcessing");
+    const procStepIcon = document.getElementById("procStepIcon");
+    const procStageTitle = document.getElementById("procStageTitle");
+    const procFilename = document.getElementById("procFilename");
+    const stepPillUpload = document.getElementById("stepPillUpload");
+    const stepPillProcess = document.getElementById("stepPillProcess");
+    const stepPillUnderstand = document.getElementById("stepPillUnderstand");
+    const stepPillReady = document.getElementById("stepPillReady");
     const uploadProgressFill = document.getElementById("uploadProgressFill");
-    const uploadStatusMsg = document.getElementById("uploadStatusMsg");
-    const uploadedDocsContainer = document.getElementById("uploadedDocsContainer");
-    const uploadedDocsList = document.getElementById("uploadedDocsList");
-    const quickPromptsRow = document.getElementById("quickPromptsRow");
-    const quickChipScore = document.getElementById("quickChipScore");
-    const chatMessagesBox = document.getElementById("chatMessagesBox");
-    const chatTypingIndicator = document.getElementById("chatTypingIndicator");
+    const uploadAlert = document.getElementById("uploadAlert");
+    const activeDocsShelf = document.getElementById("activeDocsShelf");
+    const shelfPills = document.getElementById("shelfPills");
+
+    // Sidebar Items
+    const sidebarDocCount = document.getElementById("sidebarDocCount");
+    const sidebarDocList = document.getElementById("sidebarDocList");
+    const sidebarDocEmpty = document.getElementById("sidebarDocEmpty");
+    const sidebarUploadTrigger = document.getElementById("sidebarUploadTrigger");
+    const emptyDocUploadBtn = document.getElementById("emptyDocUploadBtn");
+    const sessionsHistoryList = document.getElementById("sessionsHistoryList");
+    const clearAllHistoryBtn = document.getElementById("clearAllHistoryBtn");
+
+    // Welcome Screen & Cards
+    const welcomeHero = document.getElementById("welcomeHero");
+    const welcomeContextCard = document.getElementById("welcomeContextCard");
+    const welcomeContextTitle = document.getElementById("welcomeContextTitle");
+    const welcomeContextDesc = document.getElementById("welcomeContextDesc");
+    const heroUploadTrigger = document.getElementById("heroUploadTrigger");
+
+    // Chat Feed & Composer
+    const chatViewport = document.getElementById("chatViewport");
+    const messagesContainer = document.getElementById("messagesContainer");
+    const aiTypingState = document.getElementById("aiTypingState");
+    const typingStatusText = document.getElementById("typingStatusText");
     const chatForm = document.getElementById("chatForm");
     const chatInput = document.getElementById("chatInput");
     const chatSendBtn = document.getElementById("chatSendBtn");
-    const chatSendIcon = document.getElementById("chatSendIcon");
-    const chatSendSpinner = document.getElementById("chatSendSpinner");
+    const sendIcon = document.getElementById("sendIcon");
+    const sendSpinner = document.getElementById("sendSpinner");
+    const composerAttachBtn = document.getElementById("composerAttachBtn");
+    const composerQuickChips = document.getElementById("composerQuickChips");
 
-    // Session management for Chat & RAG
-    let currentChatSessionId = sessionStorage.getItem("study_assistant_session_id");
-    if (!currentChatSessionId) {
-        currentChatSessionId = "sess_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 8);
-        sessionStorage.setItem("study_assistant_session_id", currentChatSessionId);
+    // Settings Modal
+    const openSettingsBtn = document.getElementById("openSettingsBtn");
+    const settingsModal = document.getElementById("settingsModal");
+    const closeSettingsModalBtn = document.getElementById("closeSettingsModalBtn");
+    const modalModelInfo = document.getElementById("modalModelInfo");
+    const clearLocalDataBtn = document.getElementById("clearLocalDataBtn");
+
+    // ========================================================================
+    // State Management
+    // ========================================================================
+    const SESSION_STORAGE_KEY = "edvora_active_session_id";
+    const RECENT_SESSIONS_KEY = "edvora_recent_sessions";
+    
+    let currentSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!currentSessionId) {
+        currentSessionId = "edvora-" + Math.random().toString(36).substring(2, 10);
+        localStorage.setItem(SESSION_STORAGE_KEY, currentSessionId);
     }
 
-    // Context tracking for the latest valid prediction
-    let currentPredictionContext = null;
-
-    // Dashboard Statistics Elements
-    const statsStatus = document.getElementById("statsStatus");
-    const statTotal = document.getElementById("statTotal");
-    const statAverage = document.getElementById("statAverage");
-    const statHighest = document.getElementById("statHighest");
-    const statLowest = document.getElementById("statLowest");
-
-    // Prediction History Elements
-    const historyLoading = document.getElementById("historyLoading");
-    const historyTableWrapper = document.getElementById("historyTableWrapper");
-    const historyTableBody = document.getElementById("historyTableBody");
-    const historyEmpty = document.getElementById("historyEmpty");
-    const historyError = document.getElementById("historyError");
-    const refreshHistoryBtn = document.getElementById("refreshHistoryBtn");
-
-    // Input fields descriptor array for reusable validation and styling
-    const inputFields = [
-        { el: studyHoursInput, name: "Daily Study Hours" },
-        { el: previousScoreInput, name: "Previous Exam Score" },
-        { el: attendanceInput, name: "Attendance Percentage" },
-        { el: assignmentScoreInput, name: "Assignment Score" }
-    ];
+    let activeDocuments = [];
+    let latestRetrievedCitations = [];
+    let isGenerating = false;
+    let lastUserQuery = "";
 
     // ========================================================================
-    // 2. UI State Helpers (Errors & Loading)
+    // 1. Session Lifecycle & Persistence
     // ========================================================================
 
-    /**
-     * Display a validation or operational error message
-     * @param {string} message - User-friendly error message
-     * @param {HTMLInputElement|null} targetInput - Input field that caused the error
-     */
-    function showError(message, targetInput = null) {
-        errorMessage.textContent = message;
-        errorArea.classList.remove("hidden");
-
-        // Clear previous input error borders
-        inputFields.forEach(item => item.el.classList.remove("input-error"));
-
-        if (targetInput) {
-            targetInput.classList.add("input-error");
-            targetInput.focus();
+    function getLocalRecentSessions() {
+        try {
+            return JSON.parse(localStorage.getItem(RECENT_SESSIONS_KEY)) || [];
+        } catch {
+            return [];
         }
     }
 
-    /**
-     * Clear any active error message and input highlighting
-     */
-    function clearError() {
-        errorMessage.textContent = "";
-        errorArea.classList.add("hidden");
-        inputFields.forEach(item => item.el.classList.remove("input-error"));
+    function saveLocalRecentSessions(sessions) {
+        try {
+            localStorage.setItem(RECENT_SESSIONS_KEY, JSON.stringify(sessions));
+        } catch (e) {
+            console.warn("Storage save error:", e);
+        }
     }
 
-    /**
-     * Toggle the prediction button loading state
-     * @param {boolean} isLoading
-     */
-    function setFormLoading(isLoading) {
-        if (isLoading) {
-            predictButton.disabled = true;
-            btnSpinner.classList.remove("hidden");
-            btnText.textContent = "Predicting...";
+    function recordCurrentSessionInRecents(title = "New Study Session") {
+        let recents = getLocalRecentSessions();
+        const existingIdx = recents.findIndex(s => s.id === currentSessionId);
+        const item = {
+            id: currentSessionId,
+            title: title,
+            updatedAt: Date.now()
+        };
+
+        if (existingIdx >= 0) {
+            recents[existingIdx].title = title;
+            recents[existingIdx].updatedAt = Date.now();
         } else {
-            predictButton.disabled = false;
-            btnSpinner.classList.add("hidden");
-            btnText.textContent = "Predict Score";
+            recents.unshift(item);
         }
+
+        recents = recents.slice(0, 15);
+        saveLocalRecentSessions(recents);
+        renderRecentSessionsList();
     }
 
-    /**
-     * Validate client-side input fields before dispatching API request
-     * @returns {Object|null} Validated data payload or null if validation fails
-     */
-    function validateForm() {
-        clearError();
+    function renderRecentSessionsList() {
+        if (!sessionsHistoryList) return;
+        const recents = getLocalRecentSessions();
 
-        // 1. Check for empty inputs
-        for (const { el, name } of inputFields) {
-            if (el.value.trim() === "") {
-                showError(`Please enter a value for ${name}.`, el);
-                return null;
-            }
-        }
-
-        // 2. Parse numbers
-        const studyHours = parseFloat(studyHoursInput.value);
-        const previousScore = parseFloat(previousScoreInput.value);
-        const attendance = parseFloat(attendanceInput.value);
-        const assignmentScore = parseFloat(assignmentScoreInput.value);
-
-        // 3. Validate Study Hours (0 to 24)
-        if (isNaN(studyHours) || studyHours < 0 || studyHours > 24) {
-            showError("Study hours cannot be negative and must be between 0 and 24 hours per day.", studyHoursInput);
-            return null;
-        }
-
-        // 4. Validate Previous Exam Score (0 to 100)
-        if (isNaN(previousScore) || previousScore < 0 || previousScore > 100) {
-            showError("Previous score must be between 0 and 100.", previousScoreInput);
-            return null;
-        }
-
-        // 5. Validate Attendance Percentage (0 to 100)
-        if (isNaN(attendance) || attendance < 0 || attendance > 100) {
-            showError("Attendance must be between 0 and 100%.", attendanceInput);
-            return null;
-        }
-
-        // 6. Validate Assignment Score (0 to 100)
-        if (isNaN(assignmentScore) || assignmentScore < 0 || assignmentScore > 100) {
-            showError("Assignment score must be between 0 and 100.", assignmentScoreInput);
-            return null;
-        }
-
-        return {
-            study_hours: studyHours,
-            previous_score: previousScore,
-            attendance: attendance,
-            assignment_score: assignmentScore
-        };
-    }
-
-    // Clear error style as soon as user types into an invalid field
-    inputFields.forEach(({ el }) => {
-        el.addEventListener("input", () => {
-            if (el.classList.contains("input-error")) {
-                clearError();
-            }
-        });
-    });
-
-    // ========================================================================
-    // 3. Latest Prediction Display
-    // ========================================================================
-
-    /**
-     * Render the latest prediction score and animate the score progress bar
-     * @param {number} predictedScore
-     * @param {Object} studentPayload
-     */
-    function displayPrediction(predictedScore, studentPayload) {
-        const formattedScore = Number(predictedScore).toFixed(1);
-
-        // Update score text
-        scoreValue.textContent = formattedScore;
-
-        // Calculate clamped percentage for the visual bar (0 - 100%)
-        const clampedPercentage = Math.max(0, Math.min(100, Number(predictedScore)));
-        scoreProgressBar.style.width = `${clampedPercentage}%`;
-        scoreBarWrapper.setAttribute("aria-valuenow", formattedScore);
-
-        // Store context for on-demand AI explanation
-        currentPredictionContext = {
-            study_hours: studentPayload.study_hours,
-            previous_score: studentPayload.previous_score,
-            attendance: studentPayload.attendance,
-            assignment_score: studentPayload.assignment_score,
-            predicted_score: Number(predictedScore)
-        };
-
-        // Reset previous AI advice area for the new prediction
-        if (aiAdviceArea) {
-            aiAdviceArea.classList.add("hidden");
-            aiAdviceText.textContent = "";
-            if (aiAdviceError) {
-                aiAdviceError.classList.add("hidden");
-                aiAdviceError.textContent = "";
-            }
-        }
-        if (getAiAdviceBtn) {
-            getAiAdviceBtn.disabled = false;
-        }
-
-        // Transition card state
-        resultArea.classList.add("has-result");
-        resultPlaceholder.classList.add("hidden");
-        scoreDisplay.classList.remove("hidden");
-    }
-
-    // ========================================================================
-    // 4. Dashboard Statistics (GET /api/statistics)
-    // ========================================================================
-
-    /**
-     * Fetch aggregated statistics from SQLite via GET /api/statistics
-     */
-    async function loadStatistics() {
-        if (statsStatus) {
-            statsStatus.textContent = "Loading statistics...";
-        }
-
-        try {
-            const response = await fetch("/api/statistics");
-            if (!response.ok) {
-                throw new Error(`HTTP error ${response.status}`);
-            }
-
-            const data = await response.json();
-            displayStatistics(data);
-
-            if (statsStatus) {
-                statsStatus.textContent = "SQLite Aggregates";
-            }
-        } catch (err) {
-            console.error("Failed to load dashboard statistics:", err);
-            if (statsStatus) {
-                statsStatus.textContent = "Unable to load dashboard statistics.";
-            }
-        }
-    }
-
-    /**
-     * Populate statistical summary cards with real database values
-     * @param {Object} data - Payload containing total_predictions, average_score, highest_score, lowest_score
-     */
-    function displayStatistics(data) {
-        if (!data || typeof data.total_predictions === "undefined") {
-            return;
-        }
-
-        // Total count
-        statTotal.textContent = data.total_predictions;
-
-        // Average score
-        statAverage.textContent = (data.average_score !== null && data.average_score !== undefined)
-            ? Number(data.average_score).toFixed(1)
-            : "--";
-
-        // Highest score
-        statHighest.textContent = (data.highest_score !== null && data.highest_score !== undefined)
-            ? Number(data.highest_score).toFixed(1)
-            : "--";
-
-        // Lowest score
-        statLowest.textContent = (data.lowest_score !== null && data.lowest_score !== undefined)
-            ? Number(data.lowest_score).toFixed(1)
-            : "--";
-    }
-
-    // ========================================================================
-    // 5. Prediction History (GET /api/predictions)
-    // ========================================================================
-
-    /**
-     * Fetch and render prediction history table from GET /api/predictions
-     */
-    async function loadPredictionHistory() {
-        historyLoading.classList.remove("hidden");
-        historyTableWrapper.classList.add("hidden");
-        historyEmpty.classList.add("hidden");
-        historyError.classList.add("hidden");
-
-        try {
-            const response = await fetch("/api/predictions");
-            if (!response.ok) {
-                throw new Error(`HTTP error ${response.status}`);
-            }
-
-            const data = await response.json();
-            const predictions = (data && Array.isArray(data.predictions)) ? data.predictions : [];
-
-            historyLoading.classList.add("hidden");
-            displayPredictions(predictions);
-        } catch (err) {
-            console.error("Failed to load prediction history:", err);
-            historyLoading.classList.add("hidden");
-            historyError.classList.remove("hidden");
-        }
-    }
-
-    /**
-     * Render prediction items into the history table
-     * @param {Array} predictions - List of prediction objects from SQLite
-     */
-    function displayPredictions(predictions) {
-        if (!predictions || predictions.length === 0) {
-            historyEmpty.classList.remove("hidden");
-            historyTableWrapper.classList.add("hidden");
-            return;
-        }
-
-        historyEmpty.classList.add("hidden");
-        historyTableBody.innerHTML = "";
-
-        predictions.forEach(item => {
-            const row = document.createElement("tr");
-
-            // Format timestamp (e.g., YYYY-MM-DD HH:MM)
-            const formattedDate = item.created_at ? item.created_at.substring(0, 16) : "Just now";
-
-            row.innerHTML = `
-                <td>${formattedDate}</td>
-                <td>${Number(item.study_hours).toFixed(1)}h</td>
-                <td>${Number(item.previous_score).toFixed(1)}</td>
-                <td>${Number(item.attendance).toFixed(1)}%</td>
-                <td>${Number(item.assignment_score).toFixed(1)}</td>
-                <td><span class="history-predicted-badge">${Number(item.predicted_score).toFixed(1)}</span></td>
+        if (recents.length === 0) {
+            sessionsHistoryList.innerHTML = `
+                <div style="font-size:0.75rem; color:var(--text-muted); padding:6px 8px;">No previous sessions yet.</div>
             `;
-            historyTableBody.appendChild(row);
-        });
-
-        historyTableWrapper.classList.remove("hidden");
-    }
-
-    // Manual refresh button for prediction history and statistics
-    if (refreshHistoryBtn) {
-        refreshHistoryBtn.addEventListener("click", () => {
-            loadPredictionHistory();
-            loadStatistics();
-        });
-    }
-
-    // ========================================================================
-    // 6. Form Submission (POST /api/predict)
-    // ========================================================================
-
-    form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-
-        // 1. Run client-side validation
-        const payload = validateForm();
-        if (!payload) {
             return;
         }
 
-        // 2. Set button loading state
-        setFormLoading(true);
+        sessionsHistoryList.innerHTML = recents.map(s => `
+            <div class="session-history-item ${s.id === currentSessionId ? 'active' : ''}" data-session-id="${escapeHtml(s.id)}" title="${escapeHtml(s.title)}">
+                <span class="session-item-title">${escapeHtml(s.title)}</span>
+            </div>
+        `).join("");
+
+        sessionsHistoryList.querySelectorAll(".session-history-item").forEach(el => {
+            el.addEventListener("click", () => {
+                const targetId = el.getAttribute("data-session-id");
+                if (targetId && targetId !== currentSessionId) {
+                    switchToSession(targetId);
+                }
+            });
+        });
+    }
+
+    async function switchToSession(targetId) {
+        currentSessionId = targetId;
+        localStorage.setItem(SESSION_STORAGE_KEY, targetId);
+        messagesContainer.innerHTML = "";
+        latestRetrievedCitations = [];
+        renderInspectorSources();
+        closeSidebar();
+
+        const recents = getLocalRecentSessions();
+        const found = recents.find(s => s.id === targetId);
+        if (currentSessionTitle) {
+            currentSessionTitle.textContent = found ? found.title : "Study Session";
+        }
+
+        await loadHistory();
+        await loadUploadedDocuments();
+        renderRecentSessionsList();
+    }
+
+    async function createNewSession(customTitle = "New Study Session") {
+        const newId = "edvora-" + Math.random().toString(36).substring(2, 10);
+        currentSessionId = newId;
+        localStorage.setItem(SESSION_STORAGE_KEY, newId);
+
+        messagesContainer.innerHTML = "";
+        latestRetrievedCitations = [];
+        renderInspectorSources();
+
+        if (currentSessionTitle) {
+            currentSessionTitle.textContent = customTitle;
+        }
+        if (welcomeHero) {
+            welcomeHero.classList.remove("hidden");
+        }
+
+        recordCurrentSessionInRecents(customTitle);
+        await loadUploadedDocuments();
+        closeSidebar();
+
+        if (chatInput) {
+            chatInput.focus();
+        }
+    }
+
+    // ========================================================================
+    // 2. Chat History & Message Rendering
+    // ========================================================================
+
+    async function loadHistory() {
+        try {
+            const res = await fetch(`/api/chat/history?session_id=${encodeURIComponent(currentSessionId)}`);
+            const data = await res.json().catch(() => null);
+
+            if (!res.ok || !data || !Array.isArray(data.messages)) {
+                return;
+            }
+
+            messagesContainer.innerHTML = "";
+            if (data.messages.length > 0) {
+                if (welcomeHero) welcomeHero.classList.add("hidden");
+                data.messages.forEach(msg => {
+                    renderMessageBubble(msg.role, msg.content, msg.citations || [], msg.timestamp);
+                });
+                chatViewport.scrollTop = chatViewport.scrollHeight;
+            } else {
+                if (welcomeHero) welcomeHero.classList.remove("hidden");
+            }
+        } catch (err) {
+            console.warn("Failed to load history:", err);
+        }
+    }
+
+    function renderMessageBubble(role, content, citations = [], timestamp = null) {
+        if (!messagesContainer) return;
+        if (welcomeHero) welcomeHero.classList.add("hidden");
+
+        const isUser = (role === "user");
+        const msgDiv = document.createElement("div");
+        msgDiv.className = `chat-message ${isUser ? 'user-chat-turn' : 'ai-chat-turn'}`;
+
+        const now = timestamp ? new Date(timestamp * 1000) : new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        if (isUser) {
+            msgDiv.innerHTML = `
+                <div class="user-avatar" aria-hidden="true">👤</div>
+                <div class="message-wrapper">
+                    <div class="message-header-bar">
+                        <span class="message-sender">You</span>
+                        <span class="message-time">${timeStr}</span>
+                    </div>
+                    <div class="user-message-card">
+                        ${escapeHtml(content)}
+                    </div>
+                </div>
+            `;
+        } else {
+            // Update latest retrieved citations for Inspector panel
+            if (citations && citations.length > 0) {
+                latestRetrievedCitations = citations;
+                renderInspectorSources();
+            }
+
+            // RAG Banner
+            let ragBannerHtml = "";
+            if (citations && citations.length > 0) {
+                const count = citations.length;
+                const sourceTags = citations.map(c => `
+                    <span class="rag-tag-item" title="${escapeHtml(c.filename)}">
+                        📄 ${escapeHtml(c.filename)} (P.${c.page})
+                    </span>
+                `).join("");
+
+                ragBannerHtml = `
+                    <div class="rag-context-banner">
+                        <div class="rag-banner-left">
+                            <span>⚡ Using your knowledge base</span>
+                            <span style="color:var(--text-muted); font-weight:normal;">• ${count} relevant section${count > 1 ? 's' : ''} found</span>
+                        </div>
+                        <div class="rag-source-tags">
+                            ${sourceTags}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Markdown formatting
+            const formattedBody = formatMarkdown(content);
+
+            // Citations accordion
+            let citationsAccordionHtml = "";
+            if (citations && citations.length > 0) {
+                const count = citations.length;
+                const items = citations.map(c => `
+                    <div class="citation-item">
+                        <div class="citation-header">
+                            <span>📄 ${escapeHtml(c.filename)} — Page ${escapeHtml(String(c.page || 1))}</span>
+                            <span style="color:var(--accent-cyan);">${Math.round((c.score || 0) * 100)}% match</span>
+                        </div>
+                        <div class="citation-snippet">"${escapeHtml(c.snippet || '')}"</div>
+                    </div>
+                `).join("");
+
+                citationsAccordionHtml = `
+                    <div class="citations-box">
+                        <details class="citations-details">
+                            <summary>
+                                <span>📚 View ${count} cited source excerpt${count > 1 ? 's' : ''}</span>
+                            </summary>
+                            <div class="citations-list">
+                                ${items}
+                            </div>
+                        </details>
+                    </div>
+                `;
+            }
+
+            msgDiv.innerHTML = `
+                <div class="edvora-avatar" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
+                        <path d="M12 2L14.2 9.8L22 12L14.2 14.2L12 22L9.8 14.2L2 12L9.8 9.8L12 2Z" fill="white"/>
+                    </svg>
+                </div>
+                <div class="message-wrapper">
+                    <div class="message-header-bar">
+                        <span class="message-sender">Edvora</span>
+                        <span class="message-model-tag">AI Tutor</span>
+                        <span class="message-time">${timeStr}</span>
+                    </div>
+                    
+                    <div class="ai-message-card">
+                        ${ragBannerHtml}
+                        <div class="ai-rendered-content">${formattedBody}</div>
+                        ${citationsAccordionHtml}
+                    </div>
+
+                    <div class="message-actions-bar">
+                        <button type="button" class="btn-msg-action btn-copy-msg" title="Copy answer">
+                            <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 2H9a3 3 0 01-3-2z"/></svg>
+                            <span class="copy-lbl">Copy</span>
+                        </button>
+                        <button type="button" class="btn-msg-action btn-regen-msg" title="Regenerate this response">
+                            <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+                            <span>Regenerate</span>
+                        </button>
+                        ${citations && citations.length > 0 ? `
+                        <button type="button" class="btn-msg-action btn-inspect-sources" title="Open source inspector">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                            <span>Inspect Sources</span>
+                        </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Attach Copy Answer listener
+            const copyBtn = msgDiv.querySelector(".btn-copy-msg");
+            if (copyBtn) {
+                copyBtn.addEventListener("click", () => {
+                    navigator.clipboard.writeText(content).then(() => {
+                        const lbl = copyBtn.querySelector(".copy-lbl");
+                        if (lbl) lbl.textContent = "Copied!";
+                        setTimeout(() => {
+                            if (lbl) lbl.textContent = "Copy";
+                        }, 2000);
+                    }).catch(() => {});
+                });
+            }
+
+            // Attach Regenerate listener
+            const regenBtn = msgDiv.querySelector(".btn-regen-msg");
+            if (regenBtn) {
+                regenBtn.addEventListener("click", () => {
+                    if (lastUserQuery && !isGenerating) {
+                        sendQuery(lastUserQuery);
+                    }
+                });
+            }
+
+            // Attach Inspect Sources listener
+            const inspectBtn = msgDiv.querySelector(".btn-inspect-sources");
+            if (inspectBtn) {
+                inspectBtn.addEventListener("click", () => {
+                    openInspectorTab("tabSources");
+                });
+            }
+
+            // Attach Copy Code listeners for any code blocks
+            msgDiv.querySelectorAll(".btn-copy-code").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const code = btn.getAttribute("data-code") || "";
+                    navigator.clipboard.writeText(decodeURIComponent(code)).then(() => {
+                        btn.textContent = "Copied!";
+                        setTimeout(() => { btn.textContent = "Copy"; }, 2000);
+                    });
+                });
+            });
+        }
+
+        messagesContainer.appendChild(msgDiv);
+        chatViewport.scrollTop = chatViewport.scrollHeight;
+    }
+
+    // ========================================================================
+    // 3. User Message Dispatch & AI Generation
+    // ========================================================================
+
+    async function sendQuery(queryText) {
+        if (!queryText || !queryText.trim() || isGenerating) return;
+        const textToSend = queryText.trim();
+        lastUserQuery = textToSend;
+
+        // Render User Message
+        renderMessageBubble("user", textToSend);
+
+        // Update Session Title if fresh
+        const recents = getLocalRecentSessions();
+        const cur = recents.find(s => s.id === currentSessionId);
+        if (!cur || cur.title === "New Study Session") {
+            const derivedTitle = textToSend.length > 34 ? textToSend.substring(0, 34) + "..." : textToSend;
+            if (currentSessionTitle) currentSessionTitle.textContent = derivedTitle;
+            recordCurrentSessionInRecents(derivedTitle);
+        }
+
+        // Reset Input
+        if (chatInput) {
+            chatInput.value = "";
+            chatInput.style.height = "auto";
+        }
+
+        // Set Loading State
+        setGeneratingState(true);
 
         try {
-            // 3. Dispatch POST request to Flask backend
-            const response = await fetch("/api/predict", {
+            const res = await fetch("/api/chat/message", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(payload)
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    session_id: currentSessionId,
+                    message: textToSend
+                })
             });
 
-            const data = await response.json().catch(() => null);
+            const data = await res.json().catch(() => null);
 
-            if (!response.ok) {
-                // Show specific backend validation message if available
-                const userMessage = (data && data.error)
+            if (!res.ok || !data || !data.success) {
+                const errMsg = (data && data.error)
                     ? data.error
-                    : "Unable to generate prediction. Please try again.";
-
-                showError(userMessage);
+                    : "Unable to contact Edvora study service. Please verify your connection.";
+                renderMessageBubble("assistant", `⚠️ **Notice:** ${errMsg}`);
                 return;
             }
 
-            // 4. Handle successful prediction
-            if (data && typeof data.predicted_score !== "undefined") {
-                // Display the real ML predicted score and store context
-                displayPrediction(data.predicted_score, payload);
+            renderMessageBubble("assistant", data.reply, data.citations || []);
 
-                // Auto-refresh history and statistics from SQLite
-                loadPredictionHistory();
-                loadStatistics();
-            } else {
-                showError("Unable to generate prediction. Please try again.");
-            }
-        } catch (networkError) {
-            // Network failure or backend unreachable
-            console.error("Network error during prediction:", networkError);
-            showError("Unable to connect to the prediction service. Please ensure the Flask server is running at http://127.0.0.1:5000.");
+        } catch (err) {
+            console.error("Message send error:", err);
+            renderMessageBubble("assistant", "⚠️ **Connection Error:** Could not communicate with Edvora's study service. Please ensure the local server is running.");
         } finally {
-            // Restore button state
-            setFormLoading(false);
+            setGeneratingState(false);
+        }
+    }
+
+    function setGeneratingState(generating) {
+        isGenerating = generating;
+        if (chatSendBtn) chatSendBtn.disabled = generating;
+        if (sendIcon) sendIcon.classList.toggle("hidden", generating);
+        if (sendSpinner) sendSpinner.classList.toggle("hidden", !generating);
+        if (aiTypingState) aiTypingState.classList.toggle("hidden", !generating);
+
+        if (generating) {
+            const statusPhrases = [
+                "Edvora is analyzing knowledge base & drafting answer...",
+                "Retrieving relevant document sections with vector RAG...",
+                "Synthesizing concepts and formulating explanation...",
+                "Formatting pedagogical breakdown..."
+            ];
+            if (typingStatusText) {
+                typingStatusText.textContent = statusPhrases[Math.floor(Math.random() * statusPhrases.length)];
+            }
+            if (chatViewport) {
+                chatViewport.scrollTop = chatViewport.scrollHeight;
+            }
+        }
+    }
+
+    // ========================================================================
+    // 4. Document Upload & Multi-Stage Processing Workflow
+    // ========================================================================
+
+    async function uploadStudyFile(file) {
+        if (!file) return;
+
+        // Reset Dropzone UI to processing state
+        if (dropzoneIdle) dropzoneIdle.classList.add("hidden");
+        if (dropzoneProcessing) dropzoneProcessing.classList.remove("hidden");
+        if (uploadAlert) uploadAlert.classList.add("hidden");
+
+        if (procFilename) procFilename.textContent = file.name;
+        updateUploadWorkflowStep(1, "Uploading File...", "30%");
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("session_id", currentSessionId);
+
+        try {
+            // Simulated stage progression for smooth visual feedback
+            setTimeout(() => {
+                updateUploadWorkflowStep(2, "Extracting Text & Chunking Sections...", "65%");
+            }, 600);
+
+            setTimeout(() => {
+                updateUploadWorkflowStep(3, "Understanding & Generating Vector Index...", "85%");
+            }, 1200);
+
+            const res = await fetch("/api/chat/upload", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await res.json().catch(() => null);
+
+            if (!res.ok || !data || !data.success) {
+                const errMsg = (data && data.error) ? data.error : "Failed to parse study document.";
+                showUploadAlert(`❌ ${errMsg}`, "error");
+                resetDropzoneIdle();
+                return;
+            }
+
+            // Stage 4: Ready
+            updateUploadWorkflowStep(4, "Ready! Document Fully Indexed", "100%");
+
+            const doc = data.document;
+            setTimeout(() => {
+                resetDropzoneIdle();
+                showUploadAlert(`✅ Successfully indexed "${doc.filename}" (${doc.chunk_count} chunks, ${doc.char_count} chars)!`, "success");
+            }, 1200);
+
+            // Notify in chat feed
+            renderMessageBubble("assistant", `📄 I have parsed and indexed **${escapeHtml(doc.filename)}** into your Edvora knowledge base (${doc.chunk_count} chunks). Ask me to summarize it, create practice MCQs, or explain any concept!`);
+
+            // Refresh document list
+            await loadUploadedDocuments();
+
+        } catch (err) {
+            console.error("Upload failed:", err);
+            showUploadAlert("❌ Network error occurred while uploading document.", "error");
+            resetDropzoneIdle();
+        }
+    }
+
+    function updateUploadWorkflowStep(stepNum, title, progressWidth) {
+        if (procStageTitle) procStageTitle.textContent = title;
+        if (uploadProgressFill) uploadProgressFill.style.width = progressWidth;
+
+        const steps = [stepPillUpload, stepPillProcess, stepPillUnderstand, stepPillReady];
+        steps.forEach((step, idx) => {
+            if (!step) return;
+            const currentNum = idx + 1;
+            if (currentNum < stepNum) {
+                step.className = "step-pill completed";
+            } else if (currentNum === stepNum) {
+                step.className = "step-pill active";
+            } else {
+                step.className = "step-pill";
+            }
+        });
+
+        const icons = ["⚡", "📄", "🧠", "✅"];
+        if (procStepIcon) procStepIcon.textContent = icons[stepNum - 1] || "⚡";
+    }
+
+    function resetDropzoneIdle() {
+        if (dropzoneProcessing) dropzoneProcessing.classList.add("hidden");
+        if (dropzoneIdle) dropzoneIdle.classList.remove("hidden");
+        if (uploadProgressFill) uploadProgressFill.style.width = "0%";
+    }
+
+    function showUploadAlert(msg, type = "info") {
+        if (!uploadAlert) return;
+        uploadAlert.textContent = msg;
+        uploadAlert.className = `upload-alert ${type}`;
+        uploadAlert.classList.remove("hidden");
+
+        if (type === "success") {
+            setTimeout(() => {
+                uploadAlert.classList.add("hidden");
+            }, 7000);
+        }
+    }
+
+    // ========================================================================
+    // 5. Knowledge Base Document List Sync & Management
+    // ========================================================================
+
+    async function loadUploadedDocuments() {
+        try {
+            const res = await fetch(`/api/chat/documents?session_id=${encodeURIComponent(currentSessionId)}`);
+            const data = await res.json().catch(() => null);
+
+            if (!res.ok || !data || !Array.isArray(data.documents)) {
+                return;
+            }
+
+            activeDocuments = data.documents;
+            const count = activeDocuments.length;
+
+            // 1. Update Top Bar Status Tag
+            if (topbarRagText) {
+                topbarRagText.textContent = count > 0 
+                    ? `Knowledge Base: ${count} Active (${getTotalChunks()} chunks)`
+                    : "Upload notes to enable RAG";
+            }
+            if (topbarRagStatus) {
+                topbarRagStatus.querySelector(".rag-dot").style.backgroundColor = count > 0 
+                    ? "var(--accent-emerald)" 
+                    : "var(--accent-cyan)";
+            }
+
+            // 2. Update Sidebar Knowledge Base Section
+            if (sidebarDocCount) sidebarDocCount.textContent = String(count);
+            if (sidebarDocEmpty) sidebarDocEmpty.classList.toggle("hidden", count > 0);
+
+            if (sidebarDocList) {
+                const pillsHtml = activeDocuments.map(d => `
+                    <div class="sidebar-doc-pill" data-doc-id="${escapeHtml(d.doc_id)}">
+                        <div class="doc-pill-left">
+                            <span class="doc-file-icon">${getFileIcon(d.filename)}</span>
+                            <span class="doc-file-name" title="${escapeHtml(d.filename)}">${escapeHtml(d.filename)}</span>
+                        </div>
+                        <div class="doc-pill-right">
+                            <span class="doc-chunks-tag">${d.chunk_count}c</span>
+                            <button type="button" class="doc-del-btn" data-doc-id="${escapeHtml(d.doc_id)}" title="Remove from knowledge base">&times;</button>
+                        </div>
+                    </div>
+                `).join("");
+
+                // Keep empty state in list container if 0
+                if (count > 0) {
+                    sidebarDocList.innerHTML = pillsHtml;
+                } else if (sidebarDocEmpty) {
+                    sidebarDocList.innerHTML = "";
+                    sidebarDocList.appendChild(sidebarDocEmpty);
+                }
+            }
+
+            // 3. Update Upload Drawer Shelf
+            if (activeDocsShelf && shelfPills) {
+                activeDocsShelf.classList.toggle("hidden", count === 0);
+                shelfPills.innerHTML = activeDocuments.map(d => `
+                    <div class="sidebar-doc-pill" style="font-size:0.75rem;">
+                        <span class="doc-file-icon">${getFileIcon(d.filename)}</span>
+                        <span class="doc-file-name" style="max-width:130px;" title="${escapeHtml(d.filename)}">${escapeHtml(d.filename)}</span>
+                        <span class="doc-chunks-tag">${d.chunk_count}c</span>
+                        <button type="button" class="doc-del-btn" data-doc-id="${escapeHtml(d.doc_id)}" title="Remove">&times;</button>
+                    </div>
+                `).join("");
+            }
+
+            // 4. Update Welcome Hero Context Banner
+            if (welcomeContextTitle && welcomeContextDesc) {
+                if (count > 0) {
+                    welcomeContextTitle.textContent = "Your knowledge base is ready. Ask anything about your material.";
+                    welcomeContextDesc.textContent = `${count} document${count > 1 ? 's' : ''} indexed (${getTotalChunks()} chunks). Edvora will retrieve relevant sections for every study question.`;
+                } else {
+                    welcomeContextTitle.textContent = "Upload your study material to give Edvora context.";
+                    welcomeContextDesc.textContent = "Drop lecture slides, textbook chapters, or exam notes. Edvora will extract concepts, index vectors, and retrieve verified source citations.";
+                }
+            }
+
+            // 5. Update Inspector Documents Tab
+            if (inspectorDocsCount) inspectorDocsCount.textContent = `${count} document${count === 1 ? '' : 's'} attached`;
+            if (inspectorDocsList) {
+                if (count === 0) {
+                    inspectorDocsList.innerHTML = `
+                        <div class="sources-empty-state" style="padding:20px 10px;">
+                            <p class="pane-empty-title" style="font-size:0.84rem;">No documents in memory</p>
+                            <p class="pane-empty-desc">Upload study material to see chunks, pages, and token analytics here.</p>
+                        </div>
+                    `;
+                } else {
+                    inspectorDocsList.innerHTML = activeDocuments.map(d => `
+                        <div class="inspector-doc-item">
+                            <div class="inspector-doc-header">
+                                <span class="inspector-doc-title" title="${escapeHtml(d.filename)}">${getFileIcon(d.filename)} ${escapeHtml(d.filename)}</span>
+                                <button type="button" class="doc-del-btn" data-doc-id="${escapeHtml(d.doc_id)}" title="Remove">&times;</button>
+                            </div>
+                            <div class="inspector-doc-meta">
+                                <span>${d.chunk_count} chunks</span>
+                                <span>&bull;</span>
+                                <span>${d.page_count || 1} page${(d.page_count || 1) > 1 ? 's' : ''}</span>
+                                <span>&bull;</span>
+                                <span>${d.char_count} chars</span>
+                            </div>
+                        </div>
+                    `).join("");
+                }
+            }
+
+            // Attach Delete Listeners across all containers
+            document.querySelectorAll(".doc-del-btn").forEach(btn => {
+                btn.addEventListener("click", async (e) => {
+                    e.stopPropagation();
+                    const docId = btn.getAttribute("data-doc-id");
+                    if (docId) {
+                        await deleteDocument(docId);
+                    }
+                });
+            });
+
+        } catch (err) {
+            console.error("Failed to load documents:", err);
+        }
+    }
+
+    async function deleteDocument(docId) {
+        try {
+            const res = await fetch(`/api/chat/documents/${encodeURIComponent(docId)}?session_id=${encodeURIComponent(currentSessionId)}`, {
+                method: "DELETE"
+            });
+            const data = await res.json().catch(() => null);
+
+            if (res.ok && data && data.success) {
+                renderMessageBubble("assistant", `🗑️ Removed document from active study memory.`);
+                await loadUploadedDocuments();
+            }
+        } catch (err) {
+            console.error("Failed to delete document:", err);
+        }
+    }
+
+    function getTotalChunks() {
+        return activeDocuments.reduce((sum, d) => sum + (d.chunk_count || 0), 0);
+    }
+
+    function getFileIcon(filename) {
+        if (!filename) return "📄";
+        const ext = filename.split(".").pop().toLowerCase();
+        if (ext === "pdf") return "📕";
+        if (ext === "docx" || ext === "doc") return "📘";
+        if (ext === "txt") return "📄";
+        if (ext === "md" || ext === "markdown") return "📝";
+        return "📑";
+    }
+
+    // ========================================================================
+    // 6. Right Context Panel: Sources Inspector Tab
+    // ========================================================================
+
+    function renderInspectorSources() {
+        if (!sourcesCardList || !sourcesEmptyState) return;
+
+        if (!latestRetrievedCitations || latestRetrievedCitations.length === 0) {
+            sourcesEmptyState.classList.remove("hidden");
+            sourcesCardList.innerHTML = "";
+            return;
+        }
+
+        sourcesEmptyState.classList.add("hidden");
+        sourcesCardList.innerHTML = latestRetrievedCitations.map(c => `
+            <div class="source-inspector-card">
+                <div class="source-card-top">
+                    <span class="source-doc-name" title="${escapeHtml(c.filename)}">📄 ${escapeHtml(c.filename)}</span>
+                    <span class="source-match-score">${Math.round((c.score || 0) * 100)}% match</span>
+                </div>
+                <span class="source-page-label">Page / Section: ${escapeHtml(String(c.page || 1))}</span>
+                <div class="source-card-text">"${escapeHtml(c.snippet || '')}"</div>
+            </div>
+        `).join("");
+    }
+
+    function openInspectorTab(tabId) {
+        if (contextPanel) {
+            contextPanel.classList.remove("collapsed");
+            if (window.innerWidth <= 900) {
+                contextPanel.classList.add("open-mobile");
+                if (inspectorBackdrop) inspectorBackdrop.classList.add("active");
+            }
+        }
+
+        document.querySelectorAll(".tab-btn").forEach(btn => {
+            btn.classList.toggle("active", btn.getAttribute("data-tab") === tabId);
+        });
+
+        document.querySelectorAll(".tab-pane").forEach(pane => {
+            pane.classList.toggle("active", pane.id === tabId);
+        });
+    }
+
+    // ========================================================================
+    // 7. Event Handlers & Micro-Interactions
+    // ========================================================================
+
+    // Composer Form Submit
+    if (chatForm) {
+        chatForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            if (chatInput) sendQuery(chatInput.value);
+        });
+    }
+
+    // Textarea Enter-to-send (Shift+Enter for newline)
+    if (chatInput) {
+        chatInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendQuery(chatInput.value);
+            }
+        });
+
+        // Auto-resizing textarea
+        chatInput.addEventListener("input", () => {
+            chatInput.style.height = "auto";
+            chatInput.style.height = Math.min(chatInput.scrollHeight, 140) + "px";
+        });
+    }
+
+    // Global Keyboard Shortcut: Ctrl+K or Cmd+K for New Chat
+    document.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+            e.preventDefault();
+            createNewSession();
         }
     });
 
-    // ========================================================================
-    // 7. Phase 9: AI Study Advice Action (Bridged with Interactive Chatbot)
-    // ========================================================================
+    // New Chat Buttons
+    if (newChatBtn) {
+        newChatBtn.addEventListener("click", () => createNewSession());
+    }
 
-    if (getAiAdviceBtn) {
-        getAiAdviceBtn.addEventListener("click", async () => {
-            if (!currentPredictionContext) {
-                return;
-            }
-
-            // Enter loading state on the button
-            getAiAdviceBtn.disabled = true;
-            if (aiBtnSpinner) aiBtnSpinner.classList.remove("hidden");
-            if (aiBtnText) aiBtnText.textContent = "Generating advice...";
-
-            // Hide previous messages while loading
-            if (aiAdviceArea) aiAdviceArea.classList.add("hidden");
-            if (aiAdviceError) aiAdviceError.classList.add("hidden");
-
-            // Also smoothly scroll to the chat section so the student can converse
-            if (chatSection) {
-                chatSection.scrollIntoView({ behavior: "smooth", block: "start" });
-            }
-
+    // Reset Chat Messages Button
+    if (resetCurrentChatBtn) {
+        resetCurrentChatBtn.addEventListener("click", async () => {
             try {
-                // 1. First trigger the legacy endpoint for backward compatibility
-                const response = await fetch("/api/ai-advice", {
+                await fetch("/api/chat/reset", {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(currentPredictionContext)
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ session_id: currentSessionId })
                 });
 
-                const data = await response.json().catch(() => null);
+                messagesContainer.innerHTML = "";
+                latestRetrievedCitations = [];
+                renderInspectorSources();
+                if (welcomeHero) welcomeHero.classList.remove("hidden");
+                if (chatInput) chatInput.focus();
+            } catch (err) {
+                console.error("Reset failed:", err);
+            }
+        });
+    }
 
-                if (response.ok && data && data.success) {
-                    aiAdviceText.textContent = data.advice;
-                    if (data.model && aiModelBadge) {
-                        aiModelBadge.textContent = data.model;
-                    }
-                    aiAdviceError.classList.add("hidden");
-                    aiAdviceArea.classList.remove("hidden");
+    // Interactive Suggestion Cards & Quick Chips Handlers
+    document.addEventListener("click", (e) => {
+        const suggestCard = e.target.closest(".suggest-card");
+        if (suggestCard) {
+            const prompt = suggestCard.getAttribute("data-prompt");
+            if (prompt) sendQuery(prompt);
+            return;
+        }
 
-                    // 2. Also inject this into the interactive chatbot so the student can follow up!
-                    const advicePrompt = `Please explain my predicted score of ${currentPredictionContext.predicted_score}/100 in detail and give me personalized study recommendations based on my daily study hours (${currentPredictionContext.study_hours} hrs), previous score (${currentPredictionContext.previous_score}), attendance (${currentPredictionContext.attendance}%), and assignment score (${currentPredictionContext.assignment_score}).`;
-                    appendChatMessage("user", advicePrompt);
-                    appendChatMessage("assistant", data.advice, [], data.model);
+        const miniChip = e.target.closest(".mini-chip");
+        if (miniChip) {
+            const prompt = miniChip.getAttribute("data-prompt");
+            if (prompt) sendQuery(prompt);
+            return;
+        }
+
+        const modeBtn = e.target.closest(".mode-item");
+        if (modeBtn) {
+            const prompt = modeBtn.getAttribute("data-mode-prompt");
+            if (prompt) {
+                closeSidebar();
+                sendQuery(prompt);
+            }
+            return;
+        }
+
+        const toolActionBtn = e.target.closest(".tool-action-btn");
+        if (toolActionBtn) {
+            const prompt = toolActionBtn.getAttribute("data-prompt");
+            if (prompt) {
+                if (window.innerWidth <= 900) closeInspector();
+                sendQuery(prompt);
+            }
+            return;
+        }
+    });
+
+    // Dropzone Drag-and-Drop & File Selection
+    if (notesDropzone) {
+        notesDropzone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            notesDropzone.classList.add("dragover");
+        });
+        notesDropzone.addEventListener("dragleave", () => {
+            notesDropzone.classList.remove("dragover");
+        });
+        notesDropzone.addEventListener("drop", (e) => {
+            e.preventDefault();
+            notesDropzone.classList.remove("dragover");
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                uploadStudyFile(files[0]);
+            }
+        });
+        notesDropzone.addEventListener("click", () => {
+            if (notesFileInput) notesFileInput.click();
+        });
+        notesDropzone.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                if (notesFileInput) notesFileInput.click();
+            }
+        });
+    }
+
+    if (notesFileInput) {
+        notesFileInput.addEventListener("change", () => {
+            const files = notesFileInput.files;
+            if (files && files.length > 0) {
+                uploadStudyFile(files[0]);
+                notesFileInput.value = "";
+            }
+        });
+    }
+
+    // Attach File Trigger Buttons (Composer 📎, Sidebar, Hero, Drawer)
+    function triggerFileUpload() {
+        if (uploadDrawer && uploadDrawer.classList.contains("hidden")) {
+            uploadDrawer.classList.remove("hidden");
+        }
+        if (notesFileInput) notesFileInput.click();
+    }
+
+    if (composerAttachBtn) composerAttachBtn.addEventListener("click", triggerFileUpload);
+    if (sidebarUploadTrigger) sidebarUploadTrigger.addEventListener("click", triggerFileUpload);
+    if (emptyDocUploadBtn) emptyDocUploadBtn.addEventListener("click", triggerFileUpload);
+    if (heroUploadTrigger) heroUploadTrigger.addEventListener("click", triggerFileUpload);
+    if (inspectorUploadBtn) inspectorUploadBtn.addEventListener("click", triggerFileUpload);
+
+    // Toggle Upload Drawer
+    if (toggleUploadZoneBtn) {
+        toggleUploadZoneBtn.addEventListener("click", () => {
+            if (uploadDrawer) uploadDrawer.classList.toggle("hidden");
+        });
+    }
+    if (closeUploadDrawerBtn) {
+        closeUploadDrawerBtn.addEventListener("click", () => {
+            if (uploadDrawer) uploadDrawer.classList.add("hidden");
+        });
+    }
+
+    // Toggle Right Inspector Panel
+    if (toggleInspectorBtn) {
+        toggleInspectorBtn.addEventListener("click", () => {
+            if (contextPanel) {
+                if (window.innerWidth <= 900) {
+                    contextPanel.classList.toggle("open-mobile");
+                    if (inspectorBackdrop) inspectorBackdrop.classList.toggle("active");
                 } else {
-                    const errorMsg = (data && data.error)
-                        ? data.error
-                        : "AI advice is currently unavailable. Please try again later.";
-
-                    aiAdviceText.textContent = "";
-                    aiAdviceError.textContent = errorMsg;
-                    aiAdviceError.classList.remove("hidden");
-                    aiAdviceArea.classList.remove("hidden");
-
-                    appendChatMessage("assistant", `⚠️ **Could not generate score advice:** ${errorMsg}`);
+                    contextPanel.classList.toggle("collapsed");
                 }
+            }
+        });
+    }
+    if (closeInspectorBtn) {
+        closeInspectorBtn.addEventListener("click", closeInspector);
+    }
+    if (inspectorBackdrop) {
+        inspectorBackdrop.addEventListener("click", closeInspector);
+    }
 
-            } catch (networkError) {
-                console.error("Network error while requesting AI advice:", networkError);
-                aiAdviceText.textContent = "";
-                aiAdviceError.textContent = "Unable to connect to the AI advice service. Please check your network and ensure the Flask server is running.";
-                aiAdviceError.classList.remove("hidden");
-                aiAdviceArea.classList.remove("hidden");
-            } finally {
-                // Restore button state
-                getAiAdviceBtn.disabled = false;
-                if (aiBtnSpinner) aiBtnSpinner.classList.add("hidden");
-                if (aiBtnText) aiBtnText.innerHTML = "&#10024; Explain &amp; Get Study Advice";
+    function closeInspector() {
+        if (contextPanel) {
+            contextPanel.classList.remove("open-mobile");
+        }
+        if (inspectorBackdrop) {
+            inspectorBackdrop.classList.remove("active");
+        }
+    }
+
+    // Inspector Tab Switching
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const tabId = btn.getAttribute("data-tab");
+            openInspectorTab(tabId);
+        });
+    });
+
+    // Mobile Sidebar Drawer
+    if (mobileMenuBtn) {
+        mobileMenuBtn.addEventListener("click", () => {
+            if (sidebar) sidebar.classList.add("open-mobile");
+            if (sidebarBackdrop) sidebarBackdrop.classList.add("active");
+        });
+    }
+    if (sidebarCloseBtn) {
+        sidebarCloseBtn.addEventListener("click", closeSidebar);
+    }
+    if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener("click", closeSidebar);
+    }
+
+    function closeSidebar() {
+        if (sidebar) sidebar.classList.remove("open-mobile");
+        if (sidebarBackdrop) sidebarBackdrop.classList.remove("active");
+    }
+
+    // Clear All Sessions Button
+    if (clearAllHistoryBtn) {
+        clearAllHistoryBtn.addEventListener("click", () => {
+            if (confirm("Clear all recorded sessions from your sidebar?")) {
+                localStorage.removeItem(RECENT_SESSIONS_KEY);
+                renderRecentSessionsList();
+            }
+        });
+    }
+
+    // Settings Modal
+    if (openSettingsBtn && settingsModal) {
+        openSettingsBtn.addEventListener("click", () => {
+            settingsModal.classList.remove("hidden");
+        });
+    }
+    if (closeSettingsModalBtn && settingsModal) {
+        closeSettingsModalBtn.addEventListener("click", () => {
+            settingsModal.classList.add("hidden");
+        });
+    }
+    if (settingsModal) {
+        settingsModal.addEventListener("click", (e) => {
+            if (e.target === settingsModal) settingsModal.classList.add("hidden");
+        });
+    }
+
+    if (clearLocalDataBtn) {
+        clearLocalDataBtn.addEventListener("click", () => {
+            if (confirm("Reset all local Edvora study sessions, documents, and cache?")) {
+                localStorage.clear();
+                window.location.reload();
             }
         });
     }
 
     // ========================================================================
-    // 8. Phase 9: AI Study Assistant Chatbot & Notes RAG Implementation
+    // 8. Markdown Parsing Utility
     // ========================================================================
 
-    /**
-     * Escape HTML special characters for XSS safety
-     */
     function escapeHtml(str) {
         if (!str) return "";
         return String(str)
@@ -547,480 +1071,123 @@ document.addEventListener("DOMContentLoaded", () => {
             .replace(/'/g, "&#039;");
     }
 
-    /**
-     * Convert markdown text to clean, structured HTML
-     */
-    function formatMarkdown(text) {
-        if (!text) return "";
+    function formatMarkdown(rawText) {
+        if (!rawText) return "";
 
-        // First escape HTML entities
-        let escaped = escapeHtml(text);
+        // 1. Extract fenced code blocks first
+        const codeBlocks = [];
+        let text = rawText.replace(/```([a-zA-Z0-9_\-+]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+            const idx = codeBlocks.length;
+            const safeLang = (lang || "code").toLowerCase();
+            const safeCode = escapeHtml(code.trim());
+            const rawEncoded = encodeURIComponent(code.trim());
 
-        // Code blocks: ```code```
-        escaped = escaped.replace(/```([\s\S]*?)```/g, (match, code) => {
-            return `<pre><code>${code.trim()}</code></pre>`;
+            codeBlocks.push(`
+                <div class="code-block-wrapper">
+                    <div class="code-block-header">
+                        <span class="code-lang-tag">${safeLang}</span>
+                        <button type="button" class="btn-copy-code" data-code="${rawEncoded}">Copy</button>
+                    </div>
+                    <pre class="code-block-pre"><code>${safeCode}</code></pre>
+                </div>
+            `);
+            return `__CODE_BLOCK_${idx}__`;
         });
 
-        // Inline code: `code`
-        escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+        // 2. Escape general HTML
+        text = escapeHtml(text);
 
-        // Bold: **bold** or __bold__
-        escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        // 3. Headers
+        text = text.replace(/^#### (.*$)/gim, "<h4>$1</h4>");
+        text = text.replace(/^### (.*$)/gim, "<h3>$1</h3>");
+        text = text.replace(/^## (.*$)/gim, "<h2>$1</h2>");
+        text = text.replace(/^# (.*$)/gim, "<h1>$1</h1>");
 
-        // Italic: *italic* or _italic_
-        escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        // 4. Tables
+        text = text.replace(/((?:\|[^\n]+\|\r?\n)+)/g, (tableBlock) => {
+            const lines = tableBlock.trim().split("\n").map(l => l.trim()).filter(Boolean);
+            if (lines.length < 2) return tableBlock;
 
-        // Markdown headings
-        escaped = escaped.replace(/^### (.*$)/gim, '<h4 style="margin: 0.5rem 0 0.25rem 0; font-weight: 600;">$1</h4>');
-        escaped = escaped.replace(/^## (.*$)/gim, '<h3 style="margin: 0.6rem 0 0.3rem 0; font-weight: 700;">$1</h3>');
-
-        // Lines and lists
-        const lines = escaped.split('\n');
-        let inList = false;
-        let listType = 'ul';
-        const formattedLines = [];
-
-        for (let i = 0; i < lines.length; i++) {
-            const rawLine = lines[i];
-            const line = rawLine.trim();
-
-            const bulletMatch = line.match(/^[-*•]\s+(.*)$/);
-            const numberMatch = line.match(/^(\d+)\.\s+(.*)$/);
-
-            if (bulletMatch) {
-                if (!inList || listType !== 'ul') {
-                    if (inList) formattedLines.push(`</${listType}>`);
-                    formattedLines.push('<ul>');
-                    inList = true;
-                    listType = 'ul';
-                }
-                formattedLines.push(`<li>${bulletMatch[1]}</li>`);
-            } else if (numberMatch) {
-                if (!inList || listType !== 'ol') {
-                    if (inList) formattedLines.push(`</${listType}>`);
-                    formattedLines.push('<ol>');
-                    inList = true;
-                    listType = 'ol';
-                }
-                formattedLines.push(`<li>${numberMatch[2]}</li>`);
-            } else {
-                if (inList) {
-                    formattedLines.push(`</${listType}>`);
-                    inList = false;
-                }
-                if (line.length > 0) {
-                    // Don't wrap already block-level tags like pre, h3, h4
-                    if (line.startsWith('<pre') || line.startsWith('<h3') || line.startsWith('<h4')) {
-                        formattedLines.push(line);
-                    } else {
-                        formattedLines.push(`<p>${line}</p>`);
-                    }
-                }
-            }
-        }
-
-        if (inList) {
-            formattedLines.push(`</${listType}>`);
-        }
-
-        return formattedLines.join('');
-    }
-
-    /**
-     * Render expandable source citations box for RAG-derived responses
-     */
-    function renderCitations(citations) {
-        if (!citations || !Array.isArray(citations) || citations.length === 0) {
-            return "";
-        }
-
-        const count = citations.length;
-        const itemsHtml = citations.map(c => `
-            <div class="citation-item">
-                <div class="citation-header">
-                    <span class="citation-file">&#128196; ${escapeHtml(c.filename)}</span>
-                    <span class="citation-page">Page/Sec: ${escapeHtml(String(c.page || 1))}</span>
-                </div>
-                <div class="citation-snippet">"${escapeHtml(c.snippet || '')}"</div>
-            </div>
-        `).join("");
-
-        return `
-            <div class="citations-box">
-                <details class="citations-details">
-                    <summary class="citations-summary">
-                        <span>&#128218; Referenced ${count} section${count > 1 ? 's' : ''} from uploaded notes</span>
-                    </summary>
-                    <div class="citations-list">
-                        ${itemsHtml}
-                    </div>
-                </details>
-            </div>
-        `;
-    }
-
-    /**
-     * Append a message bubble to the chat conversation
-     */
-    function appendChatMessage(role, text, citations = [], model = "") {
-        if (!chatMessagesBox) return;
-
-        const isUser = (role === "user");
-        const msgDiv = document.createElement("div");
-        msgDiv.className = `chat-msg ${isUser ? 'user-msg' : 'assistant-msg'}`;
-
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-        const avatar = isUser ? '&#128100;' : '&#129302;';
-        const authorName = isUser ? 'You' : 'Study Assistant';
-
-        const formattedContent = isUser ? `<p>${escapeHtml(text)}</p>` : formatMarkdown(text);
-        const citationsHtml = (!isUser && citations && citations.length > 0) ? renderCitations(citations) : '';
-
-        msgDiv.innerHTML = `
-            <div class="msg-avatar" aria-hidden="true">${avatar}</div>
-            <div class="msg-bubble">
-                <div class="msg-author-row">
-                    <span class="msg-author">${authorName}</span>
-                    <span class="msg-time">${timeStr}</span>
-                </div>
-                <div class="msg-text">${formattedContent}</div>
-                ${citationsHtml}
-            </div>
-        `;
-
-        chatMessagesBox.appendChild(msgDiv);
-        chatMessagesBox.scrollTop = chatMessagesBox.scrollHeight;
-    }
-
-    /**
-     * Toggle chat loading state and typing indicator
-     */
-    function setChatLoading(isLoading) {
-        if (chatSendBtn) chatSendBtn.disabled = isLoading;
-        if (chatSendIcon) chatSendIcon.classList.toggle("hidden", isLoading);
-        if (chatSendSpinner) chatSendSpinner.classList.toggle("hidden", !isLoading);
-        if (chatTypingIndicator) chatTypingIndicator.classList.toggle("hidden", !isLoading);
-
-        if (isLoading && chatMessagesBox) {
-            chatMessagesBox.scrollTop = chatMessagesBox.scrollHeight;
-        }
-    }
-
-    /**
-     * Dispatch user question to /api/chat/message with multi-turn context
-     */
-    async function sendChatMessage(queryText) {
-        if (!queryText || !queryText.trim()) return;
-        const textToSend = queryText.trim();
-
-        // 1. Show user message in chat log
-        appendChatMessage("user", textToSend);
-
-        // Clear input field and reset height
-        if (chatInput) {
-            chatInput.value = "";
-            chatInput.style.height = "auto";
-        }
-
-        // 2. Set loading state
-        setChatLoading(true);
-
-        try {
-            const payload = {
-                session_id: currentChatSessionId,
-                message: textToSend,
-                prediction_context: currentPredictionContext
+            const parseCells = (row) => {
+                return row
+                    .replace(/^\|/, "")
+                    .replace(/\|$/, "")
+                    .split("|")
+                    .map(c => c.trim());
             };
 
-            const response = await fetch("/api/chat/message", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(payload)
-            });
+            const headerCells = parseCells(lines[0]);
+            // check if line 1 is separator
+            const isSeparator = /^\|?(\s*:?-+:?\s*\|)+\s*$/.test(lines[1]);
+            const bodyLines = isSeparator ? lines.slice(2) : lines.slice(1);
 
-            const data = await response.json().catch(() => null);
+            const thead = `<thead><tr>${headerCells.map(c => `<th>${c}</th>`).join("")}</tr></thead>`;
+            const tbodyRows = bodyLines.map(row => {
+                const cells = parseCells(row);
+                return `<tr>${cells.map(c => `<td>${c}</td>`).join("")}</tr>`;
+            }).join("");
 
-            if (!response.ok || !data || !data.success) {
-                const err = (data && data.error)
-                    ? data.error
-                    : "Unable to reach the AI Study Assistant. Please try again.";
-                appendChatMessage("assistant", `⚠️ **Notice:** ${err}`);
-                return;
+            return `<table>${thead}<tbody>${tbodyRows}</tbody></table>`;
+        });
+
+        // 5. Blockquotes
+        text = text.replace(/^\> (.*$)/gim, "<blockquote>$1</blockquote>");
+
+        // 6. Bold & Italics
+        text = text.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>");
+        text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+        text = text.replace(/\*(.*?)\*/g, "<em>$1</em>");
+        text = text.replace(/`([^`]+)`/g, "<code style=\"font-family:var(--font-mono); background:rgba(0,0,0,0.3); padding:1px 5px; border-radius:4px; font-size:0.86em;\">$1</code>");
+
+        // 7. Bullet Lists & Numbered Lists
+        text = text.replace(/^(\s*)-\s+(.*$)/gim, "<li>$2</li>");
+        text = text.replace(/^(\s*)\*\s+(.*$)/gim, "<li>$2</li>");
+        text = text.replace(/(<li>.*<\/li>)/gis, "<ul>$1</ul>");
+
+        // 8. Paragraphs
+        const paragraphs = text.split(/\n{2,}/);
+        text = paragraphs.map(p => {
+            const trimmed = p.trim();
+            if (!trimmed) return "";
+            if (trimmed.startsWith("<h") || trimmed.startsWith("<ul") || trimmed.startsWith("<table") || trimmed.startsWith("<blockquote") || trimmed.startsWith("__CODE_BLOCK_")) {
+                return trimmed;
             }
+            return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
+        }).join("");
 
-            // Update model badge if present
-            if (data.model && chatModelIndicator) {
-                chatModelIndicator.textContent = data.model;
-            }
+        // 9. Restore code blocks
+        codeBlocks.forEach((block, idx) => {
+            text = text.replace(`__CODE_BLOCK_${idx}__`, block);
+        });
 
-            // 3. Render Assistant response with citations
-            appendChatMessage("assistant", data.reply, data.citations, data.model);
-
-        } catch (networkError) {
-            console.error("Chat request failed:", networkError);
-            appendChatMessage("assistant", "⚠️ **Network Error:** Could not connect to the study service. Please verify the Flask server is running.");
-        } finally {
-            setChatLoading(false);
-        }
-    }
-
-    /**
-     * Display status message for document uploads
-     */
-    function showUploadStatus(msg, type = "info") {
-        if (!uploadStatusMsg) return;
-        uploadStatusMsg.textContent = msg;
-        uploadStatusMsg.className = `upload-status-msg ${type}`;
-        uploadStatusMsg.classList.remove("hidden");
-
-        if (type === "success") {
-            setTimeout(() => {
-                uploadStatusMsg.classList.add("hidden");
-            }, 5000);
-        }
-    }
-
-    /**
-     * Fetch and render active documents indexed for the session
-     */
-    async function loadUploadedDocuments() {
-        if (!uploadedDocsList || !uploadedDocsContainer) return;
-
-        try {
-            const res = await fetch(`/api/chat/documents?session_id=${encodeURIComponent(currentChatSessionId)}`);
-            const data = await res.json().catch(() => null);
-
-            if (!res.ok || !data || !data.success || !Array.isArray(data.documents)) {
-                return;
-            }
-
-            const docs = data.documents;
-            if (docs.length === 0) {
-                uploadedDocsContainer.classList.add("hidden");
-                uploadedDocsList.innerHTML = "";
-                return;
-            }
-
-            uploadedDocsContainer.classList.remove("hidden");
-            uploadedDocsList.innerHTML = docs.map(d => `
-                <div class="doc-pill" data-doc-id="${escapeHtml(d.doc_id)}">
-                    <span class="doc-pill-name" title="${escapeHtml(d.filename)}">&#128196; ${escapeHtml(d.filename)}</span>
-                    <span class="doc-pill-chunks">${d.chunk_count} chunk${d.chunk_count > 1 ? 's' : ''}</span>
-                    <button type="button" class="doc-pill-del" data-doc-id="${escapeHtml(d.doc_id)}" title="Remove document">&times;</button>
-                </div>
-            `).join("");
-
-            // Attach delete listeners
-            uploadedDocsList.querySelectorAll(".doc-pill-del").forEach(btn => {
-                btn.addEventListener("click", async (e) => {
-                    e.stopPropagation();
-                    const docId = btn.getAttribute("data-doc-id");
-                    if (docId) {
-                        await deleteStudyDocument(docId);
-                    }
-                });
-            });
-
-        } catch (err) {
-            console.error("Failed to load documents list:", err);
-        }
-    }
-
-    /**
-     * Delete a document from the session vector store
-     */
-    async function deleteStudyDocument(docId) {
-        try {
-            const res = await fetch(`/api/chat/documents/${encodeURIComponent(docId)}?session_id=${encodeURIComponent(currentChatSessionId)}`, {
-                method: "DELETE"
-            });
-            const data = await res.json().catch(() => null);
-            if (res.ok && data && data.success) {
-                loadUploadedDocuments();
-                appendChatMessage("assistant", `🗑️ Removed document from active study memory.`);
-            }
-        } catch (err) {
-            console.error("Failed to delete document:", err);
-        }
-    }
-
-    /**
-     * Upload and index a study file (PDF, DOCX, TXT, MD)
-     */
-    async function uploadStudyFile(file) {
-        if (!file) return;
-
-        showUploadStatus(`Uploading and parsing "${file.name}"...`, "info");
-        if (uploadProgress) uploadProgress.classList.remove("hidden");
-        if (uploadProgressFill) uploadProgressFill.style.width = "35%";
-
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("session_id", currentChatSessionId);
-
-        try {
-            if (uploadProgressFill) uploadProgressFill.style.width = "70%";
-            const res = await fetch("/api/chat/upload", {
-                method: "POST",
-                body: formData
-            });
-
-            const data = await res.json().catch(() => null);
-
-            if (!res.ok || !data || !data.success) {
-                const errMsg = (data && data.error) ? data.error : "Failed to upload file.";
-                showUploadStatus(`❌ ${errMsg}`, "error");
-                return;
-            }
-
-            if (uploadProgressFill) uploadProgressFill.style.width = "100%";
-            const doc = data.document;
-            showUploadStatus(`✅ Successfully indexed "${doc.filename}" (${doc.chunk_count} chunks, ${doc.char_count} chars)!`, "success");
-
-            // Post notification in chat
-            appendChatMessage("assistant", `📄 I have read and indexed **${escapeHtml(doc.filename)}** (${doc.chunk_count} chunks). Ask me questions about it, request a summary, or practice MCQs!`);
-
-            // Refresh document pills
-            loadUploadedDocuments();
-
-        } catch (err) {
-            console.error("File upload error:", err);
-            showUploadStatus("❌ Network error while uploading notes.", "error");
-        } finally {
-            setTimeout(() => {
-                if (uploadProgress) uploadProgress.classList.add("hidden");
-                if (uploadProgressFill) uploadProgressFill.style.width = "0%";
-            }, 1000);
-        }
+        return text;
     }
 
     // ========================================================================
-    // Chat & Dropzone Event Listeners
+    // 9. System Initialization & Health Check
     // ========================================================================
 
-    // Dropzone Drag & Drop
-    if (notesDropzone) {
-        notesDropzone.addEventListener("dragover", (e) => {
-            e.preventDefault();
-            notesDropzone.classList.add("dragover");
-        });
-
-        notesDropzone.addEventListener("dragleave", () => {
-            notesDropzone.classList.remove("dragover");
-        });
-
-        notesDropzone.addEventListener("drop", (e) => {
-            e.preventDefault();
-            notesDropzone.classList.remove("dragover");
-            const files = e.dataTransfer.files;
-            if (files && files.length > 0) {
-                uploadStudyFile(files[0]);
-            }
-        });
-
-        notesDropzone.addEventListener("click", () => {
-            if (notesFileInput) notesFileInput.click();
-        });
-    }
-
-    // File Input change
-    if (notesFileInput) {
-        notesFileInput.addEventListener("change", () => {
-            const files = notesFileInput.files;
-            if (files && files.length > 0) {
-                uploadStudyFile(files[0]);
-                notesFileInput.value = ""; // Reset for re-selection
-            }
-        });
-    }
-
-    // Chat Form Submit
-    if (chatForm) {
-        chatForm.addEventListener("submit", (e) => {
-            e.preventDefault();
-            if (chatInput) {
-                sendChatMessage(chatInput.value);
-            }
-        });
-    }
-
-    // Chat Textarea Enter-to-send (Shift+Enter for new line) & Auto-resize
-    if (chatInput) {
-        chatInput.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendChatMessage(chatInput.value);
-            }
-        });
-
-        chatInput.addEventListener("input", () => {
-            chatInput.style.height = "auto";
-            chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + "px";
-        });
-    }
-
-    // Quick Action Study Chips
-    if (quickPromptsRow) {
-        quickPromptsRow.addEventListener("click", (e) => {
-            const chip = e.target.closest(".quick-chip");
-            if (!chip) return;
-
-            let prompt = chip.getAttribute("data-prompt");
-            if (chip.id === "quickChipScore") {
-                if (currentPredictionContext) {
-                    prompt = `Explain my predicted score of ${currentPredictionContext.predicted_score}/100 and give me personalized study recommendations based on my metrics (${currentPredictionContext.study_hours} hrs study/day, ${currentPredictionContext.previous_score} previous score, ${currentPredictionContext.attendance}% attendance, and ${currentPredictionContext.assignment_score} assignment score).`;
-                } else {
-                    prompt = "How can a student optimize their study hours, attendance, and assignment consistency to reach a top exam score?";
+    async function checkHealth() {
+        try {
+            const res = await fetch("/api/health");
+            const data = await res.json().catch(() => null);
+            if (res.ok && data) {
+                const model = data.model || "Llama 3.3 • 70B";
+                if (modelStatusLabel) {
+                    modelStatusLabel.textContent = `Edvora • ${model}`;
+                }
+                if (modalModelInfo) {
+                    modalModelInfo.innerHTML = `<strong>${escapeHtml(model)}</strong> (RAG Vector Store Active)`;
                 }
             }
-
-            if (prompt) {
-                sendChatMessage(prompt);
-            }
-        });
+        } catch (e) {
+            console.warn("Health check error:", e);
+        }
     }
 
-    // Reset Chat / New Conversation Button
-    if (chatResetBtn) {
-        chatResetBtn.addEventListener("click", async () => {
-            try {
-                await fetch("/api/chat/reset", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ session_id: currentChatSessionId })
-                });
-
-                if (chatMessagesBox) {
-                    chatMessagesBox.innerHTML = `
-                        <div class="chat-msg assistant-msg">
-                            <div class="msg-avatar" aria-hidden="true">&#129302;</div>
-                            <div class="msg-bubble">
-                                <div class="msg-author-row">
-                                    <span class="msg-author">Study Assistant</span>
-                                    <span class="msg-time">Just now</span>
-                                </div>
-                                <div class="msg-text">
-                                    Conversation reset. How can I help you study next?
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }
-            } catch (err) {
-                console.error("Failed to reset chat session:", err);
-            }
-        });
-    }
-
-    // ========================================================================
-    // 9. Initial Dashboard Hydration
-    // ========================================================================
-    loadStatistics();
-    loadPredictionHistory();
+    // Hydrate
+    renderRecentSessionsList();
+    loadHistory();
     loadUploadedDocuments();
+    checkHealth();
 });
-

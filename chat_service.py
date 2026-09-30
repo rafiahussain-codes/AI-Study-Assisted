@@ -1,12 +1,11 @@
 """
-Student Score Predictor - AI Study Assistant Chat Service
+AI Study Assistant - Chat Service
 Handles:
 - Multi-turn conversation sessions and context memory
 - RAG integration with uploaded study notes (PDF, DOCX, TXT, MD)
-- Pronoun/follow-up query resolution ("What are its advantages?")
+- Pronoun and follow-up query resolution ("What are its advantages?")
 - Distinction between notes-based answers (with citations) and general study knowledge
-- Student academic score prediction awareness
-- Study tools: summarization, MCQs, exam prep, simple explanations, revision plans
+- Study tools: summarization, MCQs, step-by-step explanations, exam questions, concept comparisons, examples
 """
 
 import uuid
@@ -19,38 +18,37 @@ from llm_service import generate_chat_completion, is_llm_configured
 
 logger = logging.getLogger(__name__)
 
-# Default system prompt for the AI Study Assistant
-STUDY_ASSISTANT_SYSTEM_PROMPT = """You are StudySensei, an expert, patient, and encouraging AI Study Assistant and personal academic tutor.
+STUDY_ASSISTANT_SYSTEM_PROMPT = """You are Edvora, an expert, patient, and highly intelligent AI Study Assistant and personal academic companion.
+Tagline: Your AI-powered study companion.
 
-Your purpose is to help students learn effectively, understand difficult topics, prepare for exams, break down complex concepts, and analyze their study materials.
+Your purpose is to help students learn effectively, master complex subjects, prepare for exams, break down difficult ideas, and extract maximum value from their study materials.
 
 Guidelines for your responses:
 1. Tone & Style:
-   - Clear, encouraging, educational, and structured.
-   - Use Markdown formatting: bold key terms, use bullet points, numbered steps, and code/table blocks where helpful.
-   - Avoid overwhelming walls of unformatted text.
+   - Clear, pedagogical, encouraging, structured, and insightful.
+   - Use clean Markdown: bold essential terms, use bullet points, numbered steps, code blocks, or comparison tables where appropriate.
+   - Never produce monotonous walls of unformatted text.
 
 2. Source Grounding & Distinction:
    - When "UPLOADED STUDY NOTES CONTEXT" is provided:
      * Ground your answer primarily in those notes.
-     * Reference the source documents and page numbers where applicable.
+     * Accurately reflect definitions, formulas, and concepts present in the notes.
+     * Reference the source documents and page/section numbers where applicable.
    - When study notes are uploaded but do NOT contain the answer to the student's question:
-     * Explicitly state at the beginning:
+     * Explicitly inform the student at the beginning:
        "⚠️ *Note: This topic was not found in your uploaded study notes.* Here is a clear academic explanation from general knowledge:"
-     * Then proceed with an accurate, structured educational explanation.
+     * Then proceed with an accurate, well-structured educational explanation.
    - When no study notes are uploaded:
-     * Answer as a versatile, general academic tutor.
+     * Answer as a versatile, comprehensive academic study tutor.
 
 3. Study Capabilities:
-   - "Explain simply / Beginner": Use simple real-world analogies and clear step-by-step points.
+   - "Explain simply / Beginner": Use intuitive real-world analogies, plain language, and step-by-step points.
    - "Summarize": Provide a concise high-level overview, key core concepts, and primary takeaways.
-   - "Generate MCQs": Formulate 4-5 high-yield multiple-choice questions with 4 options (A, B, C, D), followed by an Answer Key with brief explanations.
-   - "Exam Prep / Key Points": Highlight definitions, formulas, common pitfalls, and likely exam questions.
-   - "Compare": Provide a clean comparative breakdown or Markdown table.
-   - "Revision Plan": Construct a realistic, phased study schedule.
-
-4. Prediction Context:
-   - If student academic metrics are provided, you may reference their study hours, attendance, or predicted score to give tailored academic coaching.
+   - "Explain paragraph / Step-by-step": Break the concept into digestible logical steps.
+   - "Generate MCQs": Create 4-5 high-yield multiple-choice questions with 4 options (A, B, C, D), followed by an Answer Key with brief explanations.
+   - "Important concepts / Exam prep": Highlight key definitions, formulas, common pitfalls, and likely exam questions.
+   - "Compare two concepts": Provide a clear comparison table or structured bullet contrasts (similarities vs. differences).
+   - "Give examples": Provide concrete, practical scenarios illustrating the concept.
 """
 
 
@@ -61,10 +59,11 @@ class ChatSession:
 
     def __init__(self, session_id: str):
         self.session_id = session_id
+        self.title = "New Study Session"
         self.created_at = time.time()
+        self.updated_at = time.time()
         self.messages: List[Dict[str, Any]] = []
         self.rag_pipeline = RAGPipeline()
-        self.prediction_context: Optional[Dict[str, Any]] = None
 
     def add_message(self, role: str, content: str, citations: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         msg = {
@@ -75,10 +74,27 @@ class ChatSession:
             "timestamp": time.time()
         }
         self.messages.append(msg)
+        self.updated_at = time.time()
+        if role == "user" and self.title == "New Study Session":
+            clean = " ".join(content.strip().split())
+            if len(clean) > 36:
+                clean = clean[:36].rstrip() + "..."
+            self.title = clean or "Study Session"
         return msg
 
     def clear_history(self):
         self.messages = []
+        self.updated_at = time.time()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "session_id": self.session_id,
+            "title": self.title,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "message_count": len(self.messages),
+            "doc_count": len(self.rag_pipeline.list_documents())
+        }
 
 
 class ChatService:
@@ -102,6 +118,21 @@ class ChatService:
             return True
         return False
 
+    def create_new_session(self, title: str = "New Study Session") -> ChatSession:
+        new_id = f"edvora-{str(uuid.uuid4())[:8]}"
+        session = ChatSession(new_id)
+        session.title = title
+        self.sessions[new_id] = session
+        return session
+
+    def list_sessions(self) -> List[Dict[str, Any]]:
+        sorted_sessions = sorted(
+            self.sessions.values(),
+            key=lambda s: s.updated_at,
+            reverse=True
+        )
+        return [s.to_dict() for s in sorted_sessions]
+
     def remove_session(self, session_id: str) -> bool:
         if session_id in self.sessions:
             del self.sessions[session_id]
@@ -110,8 +141,8 @@ class ChatService:
 
     def _resolve_contextual_query(self, current_query: str, history: List[Dict[str, Any]]) -> str:
         """
-        Enrich queries with pronouns or short follow-ups (e.g. "What are its advantages?")
-        using the previous user message so vector retrieval captures the real subject.
+        Enrich queries containing pronouns or short follow-ups (e.g. "What are its advantages?")
+        using the previous user message so vector retrieval targets the true subject.
         """
         query_lower = current_query.lower()
         pronouns = {"it", "its", "they", "them", "their", "this", "that", "these", "those"}
@@ -121,7 +152,6 @@ class ChatService:
         is_short_followup = len(current_query.split()) <= 5
 
         if (has_pronoun or is_short_followup) and history:
-            # Find the most recent user question
             last_user_query = ""
             for msg in reversed(history):
                 if msg.get("role") == "user":
@@ -135,13 +165,12 @@ class ChatService:
     def handle_message(
         self,
         session_id: Optional[str],
-        user_message: str,
-        prediction_context: Optional[Dict[str, Any]] = None
+        user_message: str
     ) -> Dict[str, Any]:
         """
         Process a student chat message:
         1. Resolve session
-        2. Resolve follow-up query context
+        2. Contextual query expansion for follow-ups
         3. Retrieve relevant chunks from uploaded notes via RAG
         4. Assemble conversational prompts
         5. Invoke LLM
@@ -155,9 +184,6 @@ class ChatService:
                 "success": False,
                 "error": "Message cannot be empty."
             }
-
-        if prediction_context:
-            session.prediction_context = prediction_context
 
         # 1. RAG Retrieval
         retrieval_query = self._resolve_contextual_query(clean_user_message, session.messages)
@@ -173,20 +199,6 @@ class ChatService:
         # 2. Build augmented system instructions
         system_instruction = STUDY_ASSISTANT_SYSTEM_PROMPT
 
-        # Add prediction context if available
-        pred = session.prediction_context
-        if pred and "predicted_score" in pred:
-            system_instruction += (
-                f"\n\nStudent Academic Metrics on file:\n"
-                f"- Predicted Score: {pred.get('predicted_score')} / 100\n"
-                f"- Daily Study Hours: {pred.get('study_hours', 'N/A')} hrs\n"
-                f"- Previous Exam Score: {pred.get('previous_score', 'N/A')}\n"
-                f"- Attendance Rate: {pred.get('attendance', 'N/A')}%\n"
-                f"- Assignment Score: {pred.get('assignment_score', 'N/A')}\n"
-                f"You can reference these metrics when asked about their score prediction or study strategy."
-            )
-
-        # Add notes status
         if has_uploaded_docs:
             doc_names = ", ".join(f"'{d['filename']}'" for d in active_docs)
             system_instruction += f"\n\nCurrently uploaded student notes: {doc_names}."
@@ -195,7 +207,7 @@ class ChatService:
                     f"\n\n=== UPLOADED STUDY NOTES CONTEXT ===\n"
                     f"{context_str}\n"
                     f"=== END OF CONTEXT ===\n"
-                    f"Prioritize the above context and cite relevant sources/pages in your answer."
+                    f"Prioritize the above context and cite relevant sources and page numbers in your answer."
                 )
             else:
                 system_instruction += (
@@ -204,8 +216,7 @@ class ChatService:
                     f"then provide a clear general academic explanation."
                 )
 
-        # 3. Assemble message turns for multi-turn LLM context
-        # Keep last 8 turns (4 user + 4 assistant) to maintain conversation coherence without exceeding token budget
+        # 3. Assemble message turns for multi-turn LLM context (last 8 turns)
         recent_history = session.messages[-8:]
         chat_turns = []
         for msg in recent_history:

@@ -1,0 +1,27 @@
+# Operating Systems: Memory Management & Virtual Memory
+
+## 1. Virtual Memory Concepts
+Virtual memory is a memory management technique that provides an idealized abstraction of the storage resources that are actually available on a given machine. It creates the illusion to users of a very large (main) memory.
+
+The primary benefits are:
+- Allows processes to execute without being completely placed in physical memory (RAM).
+- Enables efficient multiprocessing by isolating address spaces of different processes.
+- Increases CPU utilization and throughput because more programs can be mapped simultaneously.
+
+## 2. Demand Paging and Page Faults
+In demand paging, pages are only loaded into memory when they are required during execution, rather than pre-loading the entire program.
+- A Page Table entry contains a valid/invalid bit.
+- If a referenced page is marked invalid, a Page Fault trap occurs.
+- The operating system interrupts the CPU, locates the missing page in backing store (disk/swap), finds a free physical frame in RAM, reads the page into the frame, updates the page table, and restarts the instruction that caused the trap.
+
+## 3. Page Replacement Algorithms
+When RAM is full and a page fault occurs, the OS must select a 'victim page' to evict to disk.
+- First-In, First-Out (FIFO): Replaces the oldest page loaded. Can suffer from Belady's Anomaly where allocating more frames causes more page faults.
+- Optimal (OPT): Replaces the page that will not be used for the longest period of time in the future. Serves as a theoretical benchmark because future reference strings cannot be known in advance.
+- Least Recently Used (LRU): Replaces the page that has not been accessed for the longest time in the past. Often implemented with hardware timestamp registers or an LRU stack.
+- Clock (Second Chance): An approximation of LRU using a reference bit.
+
+## 4. Thrashing
+Thrashing occurs when a computer's virtual memory subsystem is in a constant state of paging—rapidly exchanging data in memory for data on disk.
+Because the operating system is spending more time servicing page faults than executing user instructions, CPU utilization drops drastically.
+Resolution: Reduce the degree of multiprogramming or apply the Working Set Model to ensure active processes have their working set of frames in memory.

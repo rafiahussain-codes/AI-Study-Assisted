@@ -68,28 +68,22 @@ def test_handle_message_success(mock_generate):
 
 
 @patch("chat_service.generate_chat_completion")
-def test_handle_message_with_prediction_context(mock_generate):
+def test_handle_message_study_tools(mock_generate):
     mock_generate.return_value = (
         True,
-        {"success": True, "reply": "Your study hours look solid.", "model": "mock-llm"},
+        {"success": True, "reply": "1. What is pipelining? A) ... B) ...", "model": "mock-llm"},
         200
     )
 
     service = ChatService()
     res = service.handle_message(
-        session_id="session-pred",
-        user_message="How can I improve my predicted score?",
-        prediction_context={
-            "predicted_score": 75.0,
-            "study_hours": 4.0,
-            "previous_score": 70.0,
-            "attendance": 85.0,
-            "assignment_score": 80.0
-        }
+        session_id="session-study-tools",
+        user_message="Create MCQs from these notes"
     )
 
     assert res["success"] is True
-    # Verify generate_chat_completion was called with system instruction containing prediction context
+    assert "MCQs" in res["reply"] or "pipelining" in res["reply"]
     args, kwargs = mock_generate.call_args
     system_inst = kwargs.get("system_instruction") or args[1]
-    assert "75.0" in system_inst
+    assert "Edvora" in system_inst
+

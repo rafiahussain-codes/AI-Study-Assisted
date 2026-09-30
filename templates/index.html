@@ -1,330 +1,555 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Score Predictor</title>
+    <title>Edvora — Your AI-powered study companion</title>
+    <meta name="description" content="Edvora is your intelligent AI-powered study companion with document understanding, smart chunking, vector retrieval (RAG), and multi-turn tutoring.">
+    
+    <!-- Google Fonts: Outfit (Brand & Headings) + Plus Jakarta Sans (Body) + JetBrains Mono (Code) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
-    <main class="app-container">
-        <!-- Application Header -->
-        <header class="app-header">
-            <h1 class="app-title">Student Score Predictor</h1>
-            <p class="app-subtitle">Predict your expected academic performance & track prediction history</p>
-        </header>
+<body class="edvora-app">
+    <!-- Background Ambient Glow Orbs -->
+    <div class="ambient-glow glow-top-left" aria-hidden="true"></div>
+    <div class="ambient-glow glow-bottom-right" aria-hidden="true"></div>
 
-        <!-- Prediction Input Card -->
-        <section class="card form-card" aria-labelledby="form-heading">
-            <h2 id="form-heading" class="section-title">New Student Prediction</h2>
-
-            <form id="predictionForm" novalidate>
-                <!-- Study Hours -->
-                <div class="form-group">
-                    <label for="study_hours">Daily Study Hours</label>
-                    <input 
-                        type="number" 
-                        id="study_hours" 
-                        name="study_hours" 
-                        min="0" 
-                        max="24" 
-                        step="any" 
-                        placeholder="e.g. 5" 
-                        required
-                        aria-describedby="study_hours_hint"
-                    >
-                    <span id="study_hours_hint" class="field-hint">Hours spent studying daily (0 – 24)</span>
+    <!-- Main Workspace Container -->
+    <div class="workspace-wrapper">
+        
+        <!-- ================================================================= -->
+        <!-- 1. LEFT SIDEBAR: Brand, Navigation, Documents & History            -->
+        <!-- ================================================================= -->
+        <aside class="edvora-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand-group">
+                    <div class="brand-spark-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="spark-svg">
+                            <path d="M12 2L14.2 9.8L22 12L14.2 14.2L12 22L9.8 14.2L2 12L9.8 9.8L12 2Z" fill="url(#sparkGradient)"/>
+                            <defs>
+                                <linearGradient id="sparkGradient" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                                    <stop stop-color="#8B5CF6"/>
+                                    <stop offset="0.5" stop-color="#6366F1"/>
+                                    <stop offset="1" stop-color="#06B6D4"/>
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    <div class="brand-copy">
+                        <span class="brand-name">Edvora</span>
+                        <span class="brand-tagline">AI Study Assistant</span>
+                    </div>
                 </div>
-
-                <!-- Previous Score -->
-                <div class="form-group">
-                    <label for="previous_score">Previous Exam Score</label>
-                    <input 
-                        type="number" 
-                        id="previous_score" 
-                        name="previous_score" 
-                        min="0" 
-                        max="100" 
-                        step="any" 
-                        placeholder="e.g. 72" 
-                        required
-                        aria-describedby="previous_score_hint"
-                    >
-                    <span id="previous_score_hint" class="field-hint">Score from your previous exam (0 – 100)</span>
-                </div>
-
-                <!-- Attendance -->
-                <div class="form-group">
-                    <label for="attendance">Attendance Percentage</label>
-                    <input 
-                        type="number" 
-                        id="attendance" 
-                        name="attendance" 
-                        min="0" 
-                        max="100" 
-                        step="any" 
-                        placeholder="e.g. 85" 
-                        required
-                        aria-describedby="attendance_hint"
-                    >
-                    <span id="attendance_hint" class="field-hint">Class attendance rate percentage (0 – 100%)</span>
-                </div>
-
-                <!-- Assignment Score -->
-                <div class="form-group">
-                    <label for="assignment_score">Assignment Score</label>
-                    <input 
-                        type="number" 
-                        id="assignment_score" 
-                        name="assignment_score" 
-                        min="0" 
-                        max="100" 
-                        step="any" 
-                        placeholder="e.g. 80" 
-                        required
-                        aria-describedby="assignment_score_hint"
-                    >
-                    <span id="assignment_score_hint" class="field-hint">Average score on assignments (0 – 100)</span>
-                </div>
-
-                <!-- Error Display Area -->
-                <div id="errorArea" class="error-box hidden" role="alert" aria-live="assertive">
-                    <span class="error-icon" aria-hidden="true">&#9888;</span>
-                    <span id="errorMessage" class="error-text"></span>
-                </div>
-
-                <!-- Submit Button -->
-                <button type="submit" id="predictButton" class="btn-primary">
-                    <span class="btn-spinner hidden" aria-hidden="true"></span>
-                    <span id="btnText">Predict Score</span>
+                <button type="button" class="btn-icon sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Sidebar">
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
                 </button>
-            </form>
-        </section>
+            </div>
 
-        <!-- Latest Prediction Result Section -->
-        <section class="card result-card" aria-labelledby="result-heading">
-            <h2 id="result-heading" class="result-title">Latest Prediction</h2>
-            <div id="resultArea" class="result-box" aria-live="polite">
-                <p id="resultPlaceholder" class="result-placeholder">No prediction yet.<br>Enter your academic details above to get started.</p>
-                <div id="scoreDisplay" class="score-display hidden">
-                    <div class="score-number-row">
-                        <span id="scoreValue" class="result-score">--</span>
-                        <span class="score-scale">/ 100</span>
-                    </div>
-                    <div class="score-bar-wrapper" role="progressbar" id="scoreBarWrapper" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-                        <div id="scoreProgressBar" class="score-bar-fill" style="width: 0%;"></div>
-                    </div>
+            <!-- Primary Action: New Chat -->
+            <div class="sidebar-action-wrap">
+                <button type="button" class="btn-new-chat" id="newChatBtn">
+                    <span class="btn-new-chat-icon" aria-hidden="true">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
+                    </span>
+                    <span class="btn-new-chat-label">New Study Chat</span>
+                    <kbd class="kbd-shortcut" title="Keyboard shortcut">Ctrl K</kbd>
+                </button>
+            </div>
 
-                    <!-- AI Advice Action & Display (Phase 9) -->
-                    <div class="ai-action-container">
-                        <button type="button" id="getAiAdviceBtn" class="btn-ai" title="Get personalized AI advice based on your prediction">
-                            <span class="btn-spinner hidden" id="aiBtnSpinner" aria-hidden="true"></span>
-                            <span id="aiBtnText">&#10024; Explain &amp; Get Study Advice</span>
+            <!-- Scrollable Sidebar Sections -->
+            <div class="sidebar-scrollable">
+                
+                <!-- Section: Knowledge Base / Uploaded Documents -->
+                <div class="sidebar-section">
+                    <div class="section-header">
+                        <span class="section-title">Knowledge Base</span>
+                        <div class="section-badge-group">
+                            <span class="badge-count" id="sidebarDocCount">0</span>
+                            <button type="button" class="btn-mini-action" id="sidebarUploadTrigger" title="Upload new document">
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="sidebar-doc-list" id="sidebarDocList">
+                        <!-- Populated by JavaScript or Empty State -->
+                        <div class="sidebar-empty-state" id="sidebarDocEmpty">
+                            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            <span>No notes attached yet.<br><button type="button" class="link-btn" id="emptyDocUploadBtn">Upload study notes</button></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Quick Study Modes -->
+                <div class="sidebar-section">
+                    <div class="section-header">
+                        <span class="section-title">Study Modes</span>
+                    </div>
+                    <nav class="study-modes-nav" aria-label="Study modes">
+                        <button type="button" class="mode-item" data-mode-prompt="Explain the key concepts from my notes in simple, beginner-friendly terms with intuitive analogies.">
+                            <span class="mode-icon">📖</span>
+                            <span class="mode-text">Explain My Notes</span>
+                        </button>
+                        <button type="button" class="mode-item" data-mode-prompt="Generate 5 multiple-choice questions (MCQs) based on my study material with four options (A-D) and an answer key with explanations.">
+                            <span class="mode-icon">🧠</span>
+                            <span class="mode-text">Practice MCQs</span>
+                        </button>
+                        <button type="button" class="mode-item" data-mode-prompt="Provide a comprehensive, high-yield summary of this chapter highlighting definitions, core theories, and main takeaways.">
+                            <span class="mode-icon">✨</span>
+                            <span class="mode-text">Chapter Summary</span>
+                        </button>
+                        <button type="button" class="mode-item" data-mode-prompt="Identify the most important, high-yield exam topics, formulas, and likely test questions from this material.">
+                            <span class="mode-icon">🎯</span>
+                            <span class="mode-text">High-Yield Topics</span>
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- Section: Recent Conversations -->
+                <div class="sidebar-section">
+                    <div class="section-header">
+                        <span class="section-title">Recent Chats</span>
+                        <button type="button" class="btn-clear-all" id="clearAllHistoryBtn" title="Clear all chat history">Clear</button>
+                    </div>
+                    <div class="sessions-history-list" id="sessionsHistoryList">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar Footer / Status & Settings -->
+            <div class="sidebar-footer">
+                <div class="engine-status-pill" id="engineStatusPill" title="Edvora RAG System Status">
+                    <span class="status-pulse-dot"></span>
+                    <div class="status-copy">
+                        <span class="status-label" id="modelStatusLabel">Edvora RAG Online</span>
+                        <span class="status-sub">Hybrid Vector Index</span>
+                    </div>
+                </div>
+                <button type="button" class="btn-icon" id="openSettingsBtn" aria-label="Open Settings" title="Settings & About">
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Sidebar Backdrop for Mobile -->
+        <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
+
+        <!-- ================================================================= -->
+        <!-- 2. MAIN WORKSPACE: Top Nav, Welcome / Chat & Composer               -->
+        <!-- ================================================================= -->
+        <div class="main-workspace">
+            
+            <!-- Workspace Top Bar -->
+            <header class="workspace-topbar">
+                <div class="topbar-left">
+                    <button type="button" class="btn-icon mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle Sidebar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
+                    <div class="session-info">
+                        <h1 class="session-title" id="currentSessionTitle">New Study Session</h1>
+                        <span class="session-rag-tag" id="topbarRagStatus">
+                            <span class="rag-dot"></span>
+                            <span id="topbarRagText">Upload notes to enable RAG</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="topbar-right">
+                    <!-- Toggle Document Upload Area -->
+                    <button type="button" class="btn-topbar-action" id="toggleUploadZoneBtn" title="Toggle study material upload area">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+                        <span>Upload Notes</span>
+                    </button>
+
+                    <!-- Toggle Knowledge Inspector Right Panel -->
+                    <button type="button" class="btn-topbar-action" id="toggleInspectorBtn" title="Toggle Knowledge Inspector panel">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                        <span class="desktop-only">Sources &amp; Context</span>
+                    </button>
+
+                    <!-- Reset Chat -->
+                    <button type="button" class="btn-icon" id="resetCurrentChatBtn" title="Clear current chat messages" aria-label="Reset chat">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Collapsible Study Material Dropzone & Processor -->
+            <section class="upload-drawer" id="uploadDrawer" aria-label="Study material upload">
+                <div class="upload-drawer-card">
+                    <div class="upload-drawer-header">
+                        <div class="drawer-title-group">
+                            <span class="drawer-icon">📂</span>
+                            <div>
+                                <h2 class="drawer-title">Study Material Knowledge Base</h2>
+                                <p class="drawer-desc">Attach textbooks, lecture slides, research papers, or syllabus to ground Edvora's explanations.</p>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-icon" id="closeUploadDrawerBtn" aria-label="Close upload area">
+                            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
                         </button>
                     </div>
 
-                    <div id="aiAdviceArea" class="ai-advice-box hidden" aria-live="polite">
-                        <div class="ai-advice-header">
-                            <span class="ai-badge">&#10024; AI Study Advice</span>
-                            <span id="aiModelBadge" class="ai-model-tag">Gemini LLM</span>
+                    <!-- Dropzone Container -->
+                    <div class="dropzone" id="notesDropzone" tabindex="0" role="button" aria-label="Drop study material here or click to browse">
+                        <input type="file" id="notesFileInput" class="visually-hidden" accept=".pdf,.docx,.txt,.text,.md,.markdown">
+                        
+                        <div class="dropzone-idle" id="dropzoneIdle">
+                            <div class="dropzone-icon-ring">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="upload-cloud-icon">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                            </div>
+                            <h3 class="dropzone-heading">Drop your study material here</h3>
+                            <p class="dropzone-sub">or <span class="dropzone-browse-link">browse files</span> from your computer</p>
+                            <div class="format-chips">
+                                <span class="format-chip">PDF</span>
+                                <span class="format-chip">DOCX</span>
+                                <span class="format-chip">TXT</span>
+                                <span class="format-chip">MD</span>
+                                <span class="format-size">Up to 15MB</span>
+                            </div>
                         </div>
-                        <div id="aiAdviceText" class="ai-advice-content"></div>
-                        <div id="aiAdviceError" class="ai-advice-error-text hidden"></div>
-                    </div>
-                </div>
-            </div>
-            <p class="phase-notice">Phase 9: AI / LLM Study Assistant Active</p>
-        </section>
 
-        <!-- AI Study Assistant Chatbot Card with Notes Upload & RAG -->
-        <section class="card chat-card" id="chatSection" aria-labelledby="chat-heading">
-            <div class="chat-header">
-                <div class="chat-title-group">
-                    <div class="chat-avatar-badge" aria-hidden="true">&#129302;</div>
-                    <div>
-                        <h2 id="chat-heading" class="chat-title">AI Study Assistant &amp; Notes RAG</h2>
-                        <p class="chat-subtitle">Interactive academic tutor with Study Notes Upload &amp; Retrieval-Augmented Generation</p>
-                    </div>
-                </div>
-                <div class="chat-header-actions">
-                    <span id="chatModelIndicator" class="chat-model-badge">AI Assistant Online</span>
-                    <button type="button" id="chatResetBtn" class="btn-chat-action" title="Start a fresh conversation">
-                        <span aria-hidden="true">&#8635;</span> New Chat
-                    </button>
-                </div>
-            </div>
-
-            <!-- Notes Upload Area (Dropzone & Management) -->
-            <div class="notes-upload-container" id="notesUploadContainer">
-                <div class="notes-upload-header">
-                    <div class="notes-header-left">
-                        <span class="notes-icon" aria-hidden="true">&#128196;</span>
-                        <span class="notes-title">Study Materials (RAG Knowledge Base)</span>
-                    </div>
-                    <label for="notesFileInput" class="btn-upload-trigger" id="uploadTriggerLabel">
-                        <span aria-hidden="true">&#43;</span> Upload Notes (PDF, DOCX, TXT, MD)
-                    </label>
-                    <input type="file" id="notesFileInput" class="visually-hidden" accept=".pdf,.docx,.txt,.text,.md,.markdown">
-                </div>
-
-                <div class="dropzone" id="notesDropzone">
-                    <p class="dropzone-text">
-                        <span class="dropzone-icon" aria-hidden="true">&#128229;</span>
-                        Drag &amp; drop study notes here, or <span class="dropzone-highlight">browse</span>
-                        <span class="dropzone-formats">(PDF, Word .docx, Plain Text .txt, Markdown .md &bull; Max 15MB)</span>
-                    </p>
-                    <div id="uploadProgress" class="upload-progress-bar hidden">
-                        <div id="uploadProgressFill" class="upload-progress-fill" style="width: 0%;"></div>
-                    </div>
-                    <div id="uploadStatusMsg" class="upload-status-msg hidden"></div>
-                </div>
-
-                <!-- Uploaded Documents Pills List -->
-                <div id="uploadedDocsContainer" class="uploaded-docs-container hidden">
-                    <span class="docs-label">Indexed Study Notes:</span>
-                    <div id="uploadedDocsList" class="uploaded-docs-list">
-                        <!-- Populated dynamically via JS -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Quick Action Study Chips -->
-            <div class="quick-prompts-wrapper">
-                <span class="quick-prompts-label">Quick Study Actions:</span>
-                <div class="quick-prompts-row" id="quickPromptsRow">
-                    <button type="button" class="quick-chip" data-prompt="Summarize my uploaded notes highlighting the core concepts and primary takeaways.">
-                        &#128221; Summarize Notes
-                    </button>
-                    <button type="button" class="quick-chip" data-prompt="Generate 5 multiple choice questions (MCQs) with answers and explanations from my notes.">
-                        &#10067; Practice MCQs
-                    </button>
-                    <button type="button" class="quick-chip" data-prompt="What are the most important exam topics, key formulas, and definitions here?">
-                        &#127919; Key Exam Topics
-                    </button>
-                    <button type="button" class="quick-chip" data-prompt="Explain this topic step by step like I am a beginner with a simple analogy.">
-                        &#128161; Explain Simply
-                    </button>
-                    <button type="button" class="quick-chip" data-prompt="Create a realistic 7-day revision schedule based on these topics.">
-                        &#128197; 7-Day Plan
-                    </button>
-                    <button type="button" class="quick-chip" id="quickChipScore" data-prompt="Explain my predicted score and give me practical study advice to improve.">
-                        &#128202; Analyze Score
-                    </button>
-                </div>
-            </div>
-
-            <!-- Chat Messages Log Container -->
-            <div class="chat-messages-box" id="chatMessagesBox" aria-live="polite">
-                <!-- Welcome greeting -->
-                <div class="chat-msg assistant-msg">
-                    <div class="msg-avatar" aria-hidden="true">&#129302;</div>
-                    <div class="msg-bubble">
-                        <div class="msg-author-row">
-                            <span class="msg-author">Study Assistant</span>
-                            <span class="msg-time">Just now</span>
-                        </div>
-                        <div class="msg-text">
-                            Hello! I am your <strong>AI Study Assistant</strong>. Here is how I can help you learn:
-                            <ul>
-                                <li><strong>Ask study questions:</strong> Ask about any concept, equation, or topic in natural language.</li>
-                                <li><strong>Upload your notes:</strong> Drag &amp; drop PDFs, Word docs, or text files above. I will index them and cite sources when answering!</li>
-                                <li><strong>Study tools:</strong> Ask me to summarize, create practice MCQs, extract exam prep questions, or make revision plans.</li>
-                                <li><strong>Performance coaching:</strong> Click <em>"Explain &amp; Get Study Advice"</em> above to get personalized guidance for your predicted score!</li>
-                            </ul>
+                        <!-- Multi-Stage Processing State Animation -->
+                        <div class="dropzone-processing hidden" id="dropzoneProcessing" aria-live="polite">
+                            <div class="processing-spinner-box">
+                                <div class="pulsing-orbit"></div>
+                                <span class="processing-step-icon" id="procStepIcon">⚡</span>
+                            </div>
+                            <div class="processing-status-info">
+                                <h4 class="processing-stage-title" id="procStageTitle">Uploading Document...</h4>
+                                <p class="processing-filename" id="procFilename">notes.pdf</p>
+                            </div>
+                            <!-- Stepper pills: Uploading -> Processing -> Understanding -> Ready -->
+                            <div class="workflow-stepper">
+                                <div class="step-pill active" id="stepPillUpload">
+                                    <span class="step-num">1</span> Uploading
+                                </div>
+                                <div class="step-pill" id="stepPillProcess">
+                                    <span class="step-num">2</span> Processing
+                                </div>
+                                <div class="step-pill" id="stepPillUnderstand">
+                                    <span class="step-num">3</span> Understanding
+                                </div>
+                                <div class="step-pill" id="stepPillReady">
+                                    <span class="step-num">4</span> Ready
+                                </div>
+                            </div>
+                            <!-- Progress Bar -->
+                            <div class="progress-bar-track">
+                                <div class="progress-bar-fill" id="uploadProgressFill" style="width: 25%;"></div>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Upload Alert / Feedback Banner -->
+                    <div class="upload-alert hidden" id="uploadAlert" role="alert"></div>
+
+                    <!-- Active Document Pills in Upload Drawer -->
+                    <div class="active-docs-shelf hidden" id="activeDocsShelf">
+                        <div class="shelf-label">Active in Memory:</div>
+                        <div class="shelf-pills" id="shelfPills"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Scrollable Conversation & Chat Feed -->
+            <div class="chat-viewport" id="chatViewport">
+                
+                <!-- Interactive Welcome Hero (Active on fresh session) -->
+                <div class="welcome-hero" id="welcomeHero">
+                    <div class="welcome-orb" aria-hidden="true">
+                        <div class="orb-core">
+                            <svg viewBox="0 0 24 24" fill="none" class="orb-svg">
+                                <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="white"/>
+                            </svg>
+                        </div>
+                        <div class="orb-aura"></div>
+                    </div>
+
+                    <h2 class="welcome-headline">What are you learning today?</h2>
+                    <p class="welcome-subhead">Upload your study material to give Edvora context, or select a study tool below to get started immediately.</p>
+
+                    <!-- Context Empty State Notice -->
+                    <div class="knowledge-context-card" id="welcomeContextCard">
+                        <div class="context-icon-wrap" aria-hidden="true">💡</div>
+                        <div class="context-card-content">
+                            <span class="context-title" id="welcomeContextTitle">Upload your study material to give Edvora context.</span>
+                            <p class="context-desc" id="welcomeContextDesc">Drop lecture slides, textbook chapters, or exam notes. Edvora will extract concepts, index vectors, and retrieve verified source citations.</p>
+                        </div>
+                        <button type="button" class="btn-context-upload" id="heroUploadTrigger">
+                            <span>Drop Notes</span>
+                        </button>
+                    </div>
+
+                    <!-- 6 Interactive Suggestion Cards -->
+                    <div class="suggestion-cards-grid">
+                        <button type="button" class="suggest-card" data-prompt="Explain my notes simply: break down the primary theories, core definitions, and key concepts into clear, beginner-friendly language with analogies.">
+                            <div class="suggest-icon-box">📖</div>
+                            <div class="suggest-text-box">
+                                <h3 class="suggest-title">Explain my notes</h3>
+                                <p class="suggest-desc">Break down complex concepts into simple, intuitive language</p>
+                            </div>
+                            <span class="suggest-arrow">→</span>
+                        </button>
+
+                        <button type="button" class="suggest-card" data-prompt="Generate 5 high-yield multiple-choice questions (MCQs) from my study material with four options (A, B, C, D) followed by an Answer Key with explanations.">
+                            <div class="suggest-icon-box">🧠</div>
+                            <div class="suggest-text-box">
+                                <h3 class="suggest-title">Generate MCQs</h3>
+                                <p class="suggest-desc">Test your understanding with practice quizzes and explanations</p>
+                            </div>
+                            <span class="suggest-arrow">→</span>
+                        </button>
+
+                        <button type="button" class="suggest-card" data-prompt="Summarize this chapter: provide an executive summary highlighting the essential points, key definitions, and practical takeaways.">
+                            <div class="suggest-icon-box">✨</div>
+                            <div class="suggest-text-box">
+                                <h3 class="suggest-title">Summarize a chapter</h3>
+                                <p class="suggest-desc">Extract high-yield takeaways, formulas, and main highlights</p>
+                            </div>
+                            <span class="suggest-arrow">→</span>
+                        </button>
+
+                        <button type="button" class="suggest-card" data-prompt="What are the most important concepts and likely exam questions from this material? Highlight formulas, definitions, and common student pitfalls.">
+                            <div class="suggest-icon-box">🎯</div>
+                            <div class="suggest-text-box">
+                                <h3 class="suggest-title">Find important topics</h3>
+                                <p class="suggest-desc">Pinpoint high-yield exam topics and critical definitions</p>
+                            </div>
+                            <span class="suggest-arrow">→</span>
+                        </button>
+
+                        <button type="button" class="suggest-card" data-prompt="What are the core arguments and conclusions in this document? Give me a structured breakdown.">
+                            <div class="suggest-icon-box">🔍</div>
+                            <div class="suggest-text-box">
+                                <h3 class="suggest-title">Ask about my document</h3>
+                                <p class="suggest-desc">Direct inquiries grounded directly in your uploaded material</p>
+                            </div>
+                            <span class="suggest-arrow">→</span>
+                        </button>
+
+                        <button type="button" class="suggest-card" data-prompt="Compare the two most important concepts from my notes: highlight their key similarities, differences, trade-offs, and practical use cases in a structured table.">
+                            <div class="suggest-icon-box">⚡</div>
+                            <div class="suggest-text-box">
+                                <h3 class="suggest-title">Compare two concepts</h3>
+                                <p class="suggest-desc">Contrast competing theories, data structures, or algorithms</p>
+                            </div>
+                            <span class="suggest-arrow">→</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Message List Container -->
+                <div class="messages-container" id="messagesContainer" aria-live="polite">
+                    <!-- Populated dynamically via appendMessage -->
+                </div>
+
+                <!-- AI Response / Typing State Animation -->
+                <div class="ai-typing-state hidden" id="aiTypingState" aria-hidden="true">
+                    <div class="edvora-avatar glow-pulse">
+                        <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
+                            <path d="M12 2L14.2 9.8L22 12L14.2 14.2L12 22L9.8 14.2L2 12L9.8 9.8L12 2Z" fill="white"/>
+                        </svg>
+                    </div>
+                    <div class="typing-bubble-card">
+                        <div class="typing-dots">
+                            <span class="dot dot-1"></span>
+                            <span class="dot dot-2"></span>
+                            <span class="dot dot-3"></span>
+                        </div>
+                        <span class="typing-text" id="typingStatusText">Edvora is analyzing knowledge base &amp; drafting answer...</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- Typing indicator -->
-            <div id="chatTypingIndicator" class="chat-typing-row hidden">
-                <div class="msg-avatar" aria-hidden="true">&#129302;</div>
-                <div class="typing-bubble">
-                    <span class="typing-dot"></span>
-                    <span class="typing-dot"></span>
-                    <span class="typing-dot"></span>
-                    <span class="typing-text">Study Assistant is thinking...</span>
-                </div>
-            </div>
-
-            <!-- Chat Input Box -->
-            <form id="chatForm" class="chat-input-form">
-                <div class="chat-input-wrapper">
-                    <textarea 
-                        id="chatInput" 
-                        class="chat-textarea" 
-                        placeholder="Ask a question or request notes analysis (Press Enter to send, Shift+Enter for new line)..." 
-                        rows="1"
-                        required
-                    ></textarea>
-                    <button type="submit" id="chatSendBtn" class="btn-chat-send" title="Send message">
-                        <span id="chatSendIcon" aria-hidden="true">&#10148;</span>
-                        <span id="chatSendSpinner" class="btn-spinner hidden" aria-hidden="true"></span>
+            <!-- Bottom Floating Composer -->
+            <div class="composer-container">
+                <!-- Quick Prompt Chips Row -->
+                <div class="composer-quick-chips" id="composerQuickChips">
+                    <button type="button" class="mini-chip" data-prompt="Explain this topic step by step like I am a beginner with an intuitive analogy.">
+                        <span>💡 Explain Simply</span>
+                    </button>
+                    <button type="button" class="mini-chip" data-prompt="Summarize the core takeaways from my uploaded study notes.">
+                        <span>✨ Summarize Notes</span>
+                    </button>
+                    <button type="button" class="mini-chip" data-prompt="Create 5 practice MCQs with 4 options and answer keys.">
+                        <span>🧠 Practice MCQs</span>
+                    </button>
+                    <button type="button" class="mini-chip" data-prompt="Provide real-world examples and practical applications for this concept.">
+                        <span>📚 Give Examples</span>
+                    </button>
+                    <button type="button" class="mini-chip" data-prompt="What are likely exam questions on this topic?">
+                        <span>🎯 Exam Questions</span>
                     </button>
                 </div>
-                <div class="chat-form-footer">
-                    <span class="chat-hint">&#10024; Multi-turn reasoning &bull; RAG Notes Search &bull; Enter to send, Shift+Enter for newline</span>
-                </div>
-            </form>
-        </section>
 
-        <!-- Dashboard Statistics Section -->
-        <section class="card stats-card" aria-labelledby="stats-heading">
-            <div class="stats-header">
-                <h2 id="stats-heading" class="stats-title">Performance Summary</h2>
-                <span id="statsStatus" class="stats-status-text">SQLite Aggregates</span>
-            </div>
-            <div class="stats-grid">
-                <div class="stat-box">
-                    <span class="stat-label">Total Predictions</span>
-                    <span id="statTotal" class="stat-value">0</span>
-                </div>
-                <div class="stat-box">
-                    <span class="stat-label">Average Score</span>
-                    <span id="statAverage" class="stat-value">--</span>
-                </div>
-                <div class="stat-box">
-                    <span class="stat-label">Highest Score</span>
-                    <span id="statHighest" class="stat-value">--</span>
-                </div>
-                <div class="stat-box">
-                    <span class="stat-label">Lowest Score</span>
-                    <span id="statLowest" class="stat-value">--</span>
-                </div>
-            </div>
-        </section>
+                <!-- Chat Input Form -->
+                <form id="chatForm" class="composer-card" novalidate>
+                    <div class="composer-input-row">
+                        <!-- Direct Upload Attachment Button -->
+                        <button type="button" class="btn-composer-icon" id="composerAttachBtn" title="Attach study material (PDF, DOCX, TXT)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                        </button>
 
-        <!-- Prediction History Section -->
-        <section class="card history-card" aria-labelledby="history-heading">
-            <div class="history-header">
-                <h2 id="history-heading" class="history-title">Prediction History</h2>
-                <button type="button" id="refreshHistoryBtn" class="btn-secondary" title="Refresh history from SQLite">Refresh</button>
-            </div>
-            <div id="historyContainer" class="history-container" aria-live="polite">
-                <p id="historyLoading" class="history-placeholder">Loading prediction history...</p>
-                <div id="historyTableWrapper" class="history-table-wrapper hidden">
-                    <table class="history-table">
-                        <thead>
-                            <tr>
-                                <th scope="col">Date & Time</th>
-                                <th scope="col">Study</th>
-                                <th scope="col">Previous</th>
-                                <th scope="col">Attendance</th>
-                                <th scope="col">Assignment</th>
-                                <th scope="col">Predicted</th>
-                            </tr>
-                        </thead>
-                        <tbody id="historyTableBody">
-                            <!-- Populated dynamically via JavaScript -->
-                        </tbody>
-                    </table>
-                </div>
-                <p id="historyEmpty" class="history-placeholder hidden">No prediction history yet.<br>Make your first prediction above!</p>
-                <p id="historyError" class="history-error-text hidden">Unable to load prediction history.</p>
-            </div>
-        </section>
-    </main>
+                        <textarea 
+                            id="chatInput" 
+                            class="composer-textarea" 
+                            placeholder="Ask Edvora anything about your notes, request summaries, or explain concepts..." 
+                            rows="1"
+                            aria-label="Ask Edvora a question"
+                            required
+                        ></textarea>
 
+                        <button type="submit" class="btn-send" id="chatSendBtn" title="Send question (Enter)">
+                            <span class="send-icon" id="sendIcon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                            </span>
+                            <span class="send-spinner hidden" id="sendSpinner" aria-hidden="true"></span>
+                        </button>
+                    </div>
+
+                    <div class="composer-footnote">
+                        <span class="footnote-item">⚡ <strong>Enter</strong> to send &bull; <strong>Shift + Enter</strong> for newline</span>
+                        <span class="footnote-item desktop-only">Grounded by Edvora RAG Retrieval Engine</span>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- 3. RIGHT CONTEXT PANEL: Sources, Document Inspector & Study Tools  -->
+        <!-- ================================================================= -->
+        <aside class="context-panel" id="contextPanel">
+            <div class="panel-top">
+                <div class="panel-header-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    <span>Knowledge Inspector</span>
+                </div>
+                <button type="button" class="btn-icon" id="closeInspectorBtn" aria-label="Close Inspector">
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                </button>
+            </div>
+
+            <!-- Panel Navigation Tabs -->
+            <div class="inspector-tabs">
+                <button type="button" class="tab-btn active" data-tab="tabSources" id="tabBtnSources">Sources Used</button>
+                <button type="button" class="tab-btn" data-tab="tabDocs" id="tabBtnDocs">Documents</button>
+                <button type="button" class="tab-btn" data-tab="tabTools" id="tabBtnTools">Study Tools</button>
+            </div>
+
+            <div class="inspector-content">
+                <!-- Tab 1: Sources Used in Latest Answer -->
+                <div class="tab-pane active" id="tabSources">
+                    <div class="sources-empty-state" id="sourcesEmptyState">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="pane-empty-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <p class="pane-empty-title">No Citations Yet</p>
+                        <p class="pane-empty-desc">When Edvora answers your queries using uploaded study materials, the retrieved source passages and match scores will appear here.</p>
+                    </div>
+                    <div class="sources-card-list" id="sourcesCardList">
+                        <!-- Populated by JavaScript when an answer cites documents -->
+                    </div>
+                </div>
+
+                <!-- Tab 2: Uploaded Documents in Current Session -->
+                <div class="tab-pane" id="tabDocs">
+                    <div class="docs-pane-header">
+                        <span class="pane-subtitle" id="inspectorDocsCount">0 documents attached</span>
+                        <button type="button" class="btn-mini-upload" id="inspectorUploadBtn">+ Add File</button>
+                    </div>
+                    <div class="docs-pane-list" id="inspectorDocsList">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Tab 3: Study Tools & Shortcuts -->
+                <div class="tab-pane" id="tabTools">
+                    <div class="tools-pane-group">
+                        <span class="group-title">Active Recall &amp; Testing</span>
+                        <button type="button" class="tool-action-btn" data-prompt="Generate a quick 3-question active recall test from my study notes without answers. Then wait for my response before grading.">
+                            <span class="tool-action-icon">🎯</span>
+                            <div class="tool-action-info">
+                                <span class="tool-name">Active Recall Quiz</span>
+                                <span class="tool-sub">Tests your memory before revealing answers</span>
+                            </div>
+                        </button>
+                        <button type="button" class="tool-action-btn" data-prompt="Create flashcard outlines for the 8 most essential concepts in this material in 'Front (Prompt) : Back (Answer)' format.">
+                            <span class="tool-action-icon">📇</span>
+                            <div class="tool-action-info">
+                                <span class="tool-name">Flashcard Builder</span>
+                                <span class="tool-sub">Creates front/back study prompts</span>
+                            </div>
+                        </button>
+                        <button type="button" class="tool-action-btn" data-prompt="Synthesize this material into a bulleted concept map showing parent topics, subtopics, and their relationships.">
+                            <span class="tool-action-icon">🗺️</span>
+                            <div class="tool-action-info">
+                                <span class="tool-name">Concept Hierarchy</span>
+                                <span class="tool-sub">Structures concepts logically</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Inspector Backdrop for Mobile -->
+        <div class="inspector-backdrop" id="inspectorBackdrop" aria-hidden="true"></div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- 4. SETTINGS & ABOUT MODAL                                            -->
+    <!-- ===================================================================== -->
+    <div class="modal-overlay hidden" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <span class="modal-icon">⚙️</span>
+                    <h3 class="modal-title" id="modalTitle">Edvora Settings &amp; Engine</h3>
+                </div>
+                <button type="button" class="btn-icon" id="closeSettingsModalBtn" aria-label="Close Settings">
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-field">
+                    <label class="settings-label">Platform Identity</label>
+                    <div class="settings-value-box">
+                        <strong>Edvora v2.0</strong> — Your AI-powered study companion.
+                    </div>
+                </div>
+                <div class="settings-field">
+                    <label class="settings-label">RAG Retrieval Architecture</label>
+                    <div class="settings-value-box">
+                        Hybrid Vector Indexing (TF-IDF sublinear vectors, cosine similarity, keyword frequency boosting) with multi-turn pronoun resolution.
+                    </div>
+                </div>
+                <div class="settings-field">
+                    <label class="settings-label">Active AI Model</label>
+                    <div class="settings-value-box" id="modalModelInfo">
+                        Detecting configured LLM...
+                    </div>
+                </div>
+                <div class="settings-field">
+                    <label class="settings-label">Local Data &amp; Storage</label>
+                    <div class="settings-action-row">
+                        <button type="button" class="btn-danger-outline" id="clearLocalDataBtn">
+                            Reset All Local Sessions &amp; Cache
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
