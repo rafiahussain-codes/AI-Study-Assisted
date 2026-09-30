@@ -23,6 +23,10 @@ load_dotenv()
 
 # Import isolated LLM service
 from llm_service import generate_study_advice, is_llm_configured
+from chat_service import chat_service
+from rag.document_loader import DocumentLoadError, SUPPORTED_EXTENSIONS
+from werkzeug.utils import secure_filename
+import io
 
 
 app = Flask(__name__)
@@ -515,6 +519,145 @@ def get_ai_advice():
     success, result_payload, status_code = generate_study_advice(validated_values, predicted_score)
     return jsonify(result_payload), status_code
 
+
+# ============================================================================
+# AI STUDY ASSISTANT CHATBOT & RAG API
+# ============================================================================
+
+MAX_FILE_SIZE = 15 * 1024 * 1024  # 15 MB max file upload limit
+
+
+@app.route("/api/chat/message", methods=["POST"])
+def chat_message():
+    """
+    Process incoming chat query with RAG retrieval and multi-turn context.
+    Expects JSON: { "session_id": str (optional), "message": str, "prediction_context": dict (optional) }
+    """
+    if not request.is_json:
+        return jsonify({"success": False, "error": "Request must be JSON with Content-Type: application/json"}), 400
+
+    data = request.get_json(silent=True) or {}
+    message = data.get("message", "").strip()
+    session_id = data.get("session_id", "").strip() or None
+    prediction_context = data.get("prediction_context")
+
+    if not message:
+        return jsonify({"success": False, "error": "Message text is required"}), 400
+
+    result = chat_service.handle_message(
+        session_id=session_id,
+        user_message=message,
+        prediction_context=prediction_context
+    )
+    status_code = 200 if result.get("success") else 500
+    if not result.get("success") and "configured" in result.get("error", "").lower():
+        status_code = 503
+    return jsonify(result), status_code
+
+
+@app.route("/api/chat/upload", methods=["POST"])
+def chat_upload():
+    """
+    Upload study notes (PDF, DOCX, TXT, MD) and index them in the session RAG vector store.
+    """
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "No file part in the upload request"}), 400
+
+    uploaded_file = request.files["file"]
+    if not uploaded_file or not uploaded_file.filename:
+        return jsonify({"success": False, "error": "No file selected"}), 400
+
+    raw_filename = secure_filename(uploaded_file.filename) or "study_notes.txt"
+    ext = os.path.splitext(raw_filename)[1].lower()
+
+    if ext not in SUPPORTED_EXTENSIONS:
+        return jsonify({
+            "success": False,
+            "error": f"Unsupported file type '{ext}'. Supported formats: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+        }), 400
+
+    session_id = request.form.get("session_id", "").strip() or None
+    session = chat_service.get_or_create_session(session_id)
+
+    # Read file stream into memory
+    file_bytes = uploaded_file.read()
+    if len(file_bytes) > MAX_FILE_SIZE:
+        return jsonify({"success": False, "error": f"File exceeds maximum allowed size of {MAX_FILE_SIZE // (1024*1024)}MB."}), 400
+
+    if len(file_bytes) == 0:
+        return jsonify({"success": False, "error": "Uploaded file is empty."}), 400
+
+    try:
+        stream = io.BytesIO(file_bytes)
+        result = session.rag_pipeline.process_and_index_document(
+            file_source=stream,
+            filename=raw_filename
+        )
+        return jsonify({
+            "success": True,
+            "session_id": session.session_id,
+            "document": result
+        }), 200
+    except DocumentLoadError as err:
+        return jsonify({"success": False, "error": str(err)}), 400
+    except Exception as exc:
+        app.logger.error("Error processing document '%s': %s", raw_filename, exc)
+        return jsonify({"success": False, "error": f"Failed to process document: {str(exc)}"}), 500
+
+
+@app.route("/api/chat/documents", methods=["GET"])
+def chat_list_documents():
+    """
+    List uploaded documents for the active chat session.
+    """
+    session_id = request.args.get("session_id", "").strip() or None
+    session = chat_service.get_or_create_session(session_id)
+    docs = session.rag_pipeline.list_documents()
+    return jsonify({
+        "success": True,
+        "session_id": session.session_id,
+        "documents": docs
+    }), 200
+
+
+@app.route("/api/chat/documents/<doc_id>", methods=["DELETE"])
+def chat_delete_document(doc_id):
+    """
+    Remove an uploaded document and its chunks from the session vector store.
+    """
+    session_id = request.args.get("session_id", "").strip() or None
+    session = chat_service.get_or_create_session(session_id)
+    deleted = session.rag_pipeline.delete_document(doc_id)
+    if deleted:
+        return jsonify({"success": True, "session_id": session.session_id, "deleted": doc_id}), 200
+    return jsonify({"success": False, "error": f"Document with ID '{doc_id}' not found."}), 404
+
+
+@app.route("/api/chat/history", methods=["GET"])
+def chat_history():
+    """
+    Retrieve message history and active documents for a session.
+    """
+    session_id = request.args.get("session_id", "").strip() or None
+    session = chat_service.get_or_create_session(session_id)
+    return jsonify({
+        "success": True,
+        "session_id": session.session_id,
+        "messages": session.messages,
+        "documents": session.rag_pipeline.list_documents()
+    }), 200
+
+
+@app.route("/api/chat/reset", methods=["POST"])
+def chat_reset():
+    """
+    Clear message history for a session (keeps uploaded documents intact).
+    """
+    data = request.get_json(silent=True) or {}
+    session_id = data.get("session_id", "").strip() or request.args.get("session_id", "").strip() or None
+    if session_id:
+        chat_service.reset_session(session_id)
+    return jsonify({"success": True, "session_id": session_id}), 200
 
 
 @app.errorhandler(404)

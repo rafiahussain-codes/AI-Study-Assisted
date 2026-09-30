@@ -133,7 +133,139 @@
                     </div>
                 </div>
             </div>
-            <p class="phase-notice">Phase 9: AI / LLM Study Advice Active</p>
+            <p class="phase-notice">Phase 9: AI / LLM Study Assistant Active</p>
+        </section>
+
+        <!-- AI Study Assistant Chatbot Card with Notes Upload & RAG -->
+        <section class="card chat-card" id="chatSection" aria-labelledby="chat-heading">
+            <div class="chat-header">
+                <div class="chat-title-group">
+                    <div class="chat-avatar-badge" aria-hidden="true">&#129302;</div>
+                    <div>
+                        <h2 id="chat-heading" class="chat-title">AI Study Assistant &amp; Notes RAG</h2>
+                        <p class="chat-subtitle">Interactive academic tutor with Study Notes Upload &amp; Retrieval-Augmented Generation</p>
+                    </div>
+                </div>
+                <div class="chat-header-actions">
+                    <span id="chatModelIndicator" class="chat-model-badge">AI Assistant Online</span>
+                    <button type="button" id="chatResetBtn" class="btn-chat-action" title="Start a fresh conversation">
+                        <span aria-hidden="true">&#8635;</span> New Chat
+                    </button>
+                </div>
+            </div>
+
+            <!-- Notes Upload Area (Dropzone & Management) -->
+            <div class="notes-upload-container" id="notesUploadContainer">
+                <div class="notes-upload-header">
+                    <div class="notes-header-left">
+                        <span class="notes-icon" aria-hidden="true">&#128196;</span>
+                        <span class="notes-title">Study Materials (RAG Knowledge Base)</span>
+                    </div>
+                    <label for="notesFileInput" class="btn-upload-trigger" id="uploadTriggerLabel">
+                        <span aria-hidden="true">&#43;</span> Upload Notes (PDF, DOCX, TXT, MD)
+                    </label>
+                    <input type="file" id="notesFileInput" class="visually-hidden" accept=".pdf,.docx,.txt,.text,.md,.markdown">
+                </div>
+
+                <div class="dropzone" id="notesDropzone">
+                    <p class="dropzone-text">
+                        <span class="dropzone-icon" aria-hidden="true">&#128229;</span>
+                        Drag &amp; drop study notes here, or <span class="dropzone-highlight">browse</span>
+                        <span class="dropzone-formats">(PDF, Word .docx, Plain Text .txt, Markdown .md &bull; Max 15MB)</span>
+                    </p>
+                    <div id="uploadProgress" class="upload-progress-bar hidden">
+                        <div id="uploadProgressFill" class="upload-progress-fill" style="width: 0%;"></div>
+                    </div>
+                    <div id="uploadStatusMsg" class="upload-status-msg hidden"></div>
+                </div>
+
+                <!-- Uploaded Documents Pills List -->
+                <div id="uploadedDocsContainer" class="uploaded-docs-container hidden">
+                    <span class="docs-label">Indexed Study Notes:</span>
+                    <div id="uploadedDocsList" class="uploaded-docs-list">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Action Study Chips -->
+            <div class="quick-prompts-wrapper">
+                <span class="quick-prompts-label">Quick Study Actions:</span>
+                <div class="quick-prompts-row" id="quickPromptsRow">
+                    <button type="button" class="quick-chip" data-prompt="Summarize my uploaded notes highlighting the core concepts and primary takeaways.">
+                        &#128221; Summarize Notes
+                    </button>
+                    <button type="button" class="quick-chip" data-prompt="Generate 5 multiple choice questions (MCQs) with answers and explanations from my notes.">
+                        &#10067; Practice MCQs
+                    </button>
+                    <button type="button" class="quick-chip" data-prompt="What are the most important exam topics, key formulas, and definitions here?">
+                        &#127919; Key Exam Topics
+                    </button>
+                    <button type="button" class="quick-chip" data-prompt="Explain this topic step by step like I am a beginner with a simple analogy.">
+                        &#128161; Explain Simply
+                    </button>
+                    <button type="button" class="quick-chip" data-prompt="Create a realistic 7-day revision schedule based on these topics.">
+                        &#128197; 7-Day Plan
+                    </button>
+                    <button type="button" class="quick-chip" id="quickChipScore" data-prompt="Explain my predicted score and give me practical study advice to improve.">
+                        &#128202; Analyze Score
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chat Messages Log Container -->
+            <div class="chat-messages-box" id="chatMessagesBox" aria-live="polite">
+                <!-- Welcome greeting -->
+                <div class="chat-msg assistant-msg">
+                    <div class="msg-avatar" aria-hidden="true">&#129302;</div>
+                    <div class="msg-bubble">
+                        <div class="msg-author-row">
+                            <span class="msg-author">Study Assistant</span>
+                            <span class="msg-time">Just now</span>
+                        </div>
+                        <div class="msg-text">
+                            Hello! I am your <strong>AI Study Assistant</strong>. Here is how I can help you learn:
+                            <ul>
+                                <li><strong>Ask study questions:</strong> Ask about any concept, equation, or topic in natural language.</li>
+                                <li><strong>Upload your notes:</strong> Drag &amp; drop PDFs, Word docs, or text files above. I will index them and cite sources when answering!</li>
+                                <li><strong>Study tools:</strong> Ask me to summarize, create practice MCQs, extract exam prep questions, or make revision plans.</li>
+                                <li><strong>Performance coaching:</strong> Click <em>"Explain &amp; Get Study Advice"</em> above to get personalized guidance for your predicted score!</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Typing indicator -->
+            <div id="chatTypingIndicator" class="chat-typing-row hidden">
+                <div class="msg-avatar" aria-hidden="true">&#129302;</div>
+                <div class="typing-bubble">
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-text">Study Assistant is thinking...</span>
+                </div>
+            </div>
+
+            <!-- Chat Input Box -->
+            <form id="chatForm" class="chat-input-form">
+                <div class="chat-input-wrapper">
+                    <textarea 
+                        id="chatInput" 
+                        class="chat-textarea" 
+                        placeholder="Ask a question or request notes analysis (Press Enter to send, Shift+Enter for new line)..." 
+                        rows="1"
+                        required
+                    ></textarea>
+                    <button type="submit" id="chatSendBtn" class="btn-chat-send" title="Send message">
+                        <span id="chatSendIcon" aria-hidden="true">&#10148;</span>
+                        <span id="chatSendSpinner" class="btn-spinner hidden" aria-hidden="true"></span>
+                    </button>
+                </div>
+                <div class="chat-form-footer">
+                    <span class="chat-hint">&#10024; Multi-turn reasoning &bull; RAG Notes Search &bull; Enter to send, Shift+Enter for newline</span>
+                </div>
+            </form>
         </section>
 
         <!-- Dashboard Statistics Section -->

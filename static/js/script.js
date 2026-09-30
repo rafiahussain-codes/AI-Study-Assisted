@@ -51,6 +51,34 @@ document.addEventListener("DOMContentLoaded", () => {
     const aiAdviceError = document.getElementById("aiAdviceError");
     const aiModelBadge = document.getElementById("aiModelBadge");
 
+    // Phase 9 Enhancement: AI Study Assistant Chatbot & Notes RAG Elements
+    const chatSection = document.getElementById("chatSection");
+    const chatModelIndicator = document.getElementById("chatModelIndicator");
+    const chatResetBtn = document.getElementById("chatResetBtn");
+    const notesFileInput = document.getElementById("notesFileInput");
+    const notesDropzone = document.getElementById("notesDropzone");
+    const uploadProgress = document.getElementById("uploadProgress");
+    const uploadProgressFill = document.getElementById("uploadProgressFill");
+    const uploadStatusMsg = document.getElementById("uploadStatusMsg");
+    const uploadedDocsContainer = document.getElementById("uploadedDocsContainer");
+    const uploadedDocsList = document.getElementById("uploadedDocsList");
+    const quickPromptsRow = document.getElementById("quickPromptsRow");
+    const quickChipScore = document.getElementById("quickChipScore");
+    const chatMessagesBox = document.getElementById("chatMessagesBox");
+    const chatTypingIndicator = document.getElementById("chatTypingIndicator");
+    const chatForm = document.getElementById("chatForm");
+    const chatInput = document.getElementById("chatInput");
+    const chatSendBtn = document.getElementById("chatSendBtn");
+    const chatSendIcon = document.getElementById("chatSendIcon");
+    const chatSendSpinner = document.getElementById("chatSendSpinner");
+
+    // Session management for Chat & RAG
+    let currentChatSessionId = sessionStorage.getItem("study_assistant_session_id");
+    if (!currentChatSessionId) {
+        currentChatSessionId = "sess_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 8);
+        sessionStorage.setItem("study_assistant_session_id", currentChatSessionId);
+    }
+
     // Context tracking for the latest valid prediction
     let currentPredictionContext = null;
 
@@ -427,7 +455,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // ========================================================================
-    // 7. Phase 9: AI Study Advice Action (POST /api/ai-advice)
+    // 7. Phase 9: AI Study Advice Action (Bridged with Interactive Chatbot)
     // ========================================================================
 
     if (getAiAdviceBtn) {
@@ -436,7 +464,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            // Enter loading state
+            // Enter loading state on the button
             getAiAdviceBtn.disabled = true;
             if (aiBtnSpinner) aiBtnSpinner.classList.remove("hidden");
             if (aiBtnText) aiBtnText.textContent = "Generating advice...";
@@ -445,7 +473,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (aiAdviceArea) aiAdviceArea.classList.add("hidden");
             if (aiAdviceError) aiAdviceError.classList.add("hidden");
 
+            // Also smoothly scroll to the chat section so the student can converse
+            if (chatSection) {
+                chatSection.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+
             try {
+                // 1. First trigger the legacy endpoint for backward compatibility
                 const response = await fetch("/api/ai-advice", {
                     method: "POST",
                     headers: {
@@ -456,7 +490,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 const data = await response.json().catch(() => null);
 
-                if (!response.ok || !data || !data.success) {
+                if (response.ok && data && data.success) {
+                    aiAdviceText.textContent = data.advice;
+                    if (data.model && aiModelBadge) {
+                        aiModelBadge.textContent = data.model;
+                    }
+                    aiAdviceError.classList.add("hidden");
+                    aiAdviceArea.classList.remove("hidden");
+
+                    // 2. Also inject this into the interactive chatbot so the student can follow up!
+                    const advicePrompt = `Please explain my predicted score of ${currentPredictionContext.predicted_score}/100 in detail and give me personalized study recommendations based on my daily study hours (${currentPredictionContext.study_hours} hrs), previous score (${currentPredictionContext.previous_score}), attendance (${currentPredictionContext.attendance}%), and assignment score (${currentPredictionContext.assignment_score}).`;
+                    appendChatMessage("user", advicePrompt);
+                    appendChatMessage("assistant", data.advice, [], data.model);
+                } else {
                     const errorMsg = (data && data.error)
                         ? data.error
                         : "AI advice is currently unavailable. Please try again later.";
@@ -465,17 +511,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     aiAdviceError.textContent = errorMsg;
                     aiAdviceError.classList.remove("hidden");
                     aiAdviceArea.classList.remove("hidden");
-                    return;
-                }
 
-                // Render LLM explanation safely as plain text (prevents HTML/script injection)
-                aiAdviceText.textContent = data.advice;
-                if (data.model && aiModelBadge) {
-                    aiModelBadge.textContent = data.model;
+                    appendChatMessage("assistant", `⚠️ **Could not generate score advice:** ${errorMsg}`);
                 }
-
-                aiAdviceError.classList.add("hidden");
-                aiAdviceArea.classList.remove("hidden");
 
             } catch (networkError) {
                 console.error("Network error while requesting AI advice:", networkError);
@@ -493,8 +531,496 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ========================================================================
-    // 8. Initial Dashboard Hydration
+    // 8. Phase 9: AI Study Assistant Chatbot & Notes RAG Implementation
+    // ========================================================================
+
+    /**
+     * Escape HTML special characters for XSS safety
+     */
+    function escapeHtml(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    /**
+     * Convert markdown text to clean, structured HTML
+     */
+    function formatMarkdown(text) {
+        if (!text) return "";
+
+        // First escape HTML entities
+        let escaped = escapeHtml(text);
+
+        // Code blocks: ```code```
+        escaped = escaped.replace(/```([\s\S]*?)```/g, (match, code) => {
+            return `<pre><code>${code.trim()}</code></pre>`;
+        });
+
+        // Inline code: `code`
+        escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // Bold: **bold** or __bold__
+        escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+        // Italic: *italic* or _italic_
+        escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+        // Markdown headings
+        escaped = escaped.replace(/^### (.*$)/gim, '<h4 style="margin: 0.5rem 0 0.25rem 0; font-weight: 600;">$1</h4>');
+        escaped = escaped.replace(/^## (.*$)/gim, '<h3 style="margin: 0.6rem 0 0.3rem 0; font-weight: 700;">$1</h3>');
+
+        // Lines and lists
+        const lines = escaped.split('\n');
+        let inList = false;
+        let listType = 'ul';
+        const formattedLines = [];
+
+        for (let i = 0; i < lines.length; i++) {
+            const rawLine = lines[i];
+            const line = rawLine.trim();
+
+            const bulletMatch = line.match(/^[-*•]\s+(.*)$/);
+            const numberMatch = line.match(/^(\d+)\.\s+(.*)$/);
+
+            if (bulletMatch) {
+                if (!inList || listType !== 'ul') {
+                    if (inList) formattedLines.push(`</${listType}>`);
+                    formattedLines.push('<ul>');
+                    inList = true;
+                    listType = 'ul';
+                }
+                formattedLines.push(`<li>${bulletMatch[1]}</li>`);
+            } else if (numberMatch) {
+                if (!inList || listType !== 'ol') {
+                    if (inList) formattedLines.push(`</${listType}>`);
+                    formattedLines.push('<ol>');
+                    inList = true;
+                    listType = 'ol';
+                }
+                formattedLines.push(`<li>${numberMatch[2]}</li>`);
+            } else {
+                if (inList) {
+                    formattedLines.push(`</${listType}>`);
+                    inList = false;
+                }
+                if (line.length > 0) {
+                    // Don't wrap already block-level tags like pre, h3, h4
+                    if (line.startsWith('<pre') || line.startsWith('<h3') || line.startsWith('<h4')) {
+                        formattedLines.push(line);
+                    } else {
+                        formattedLines.push(`<p>${line}</p>`);
+                    }
+                }
+            }
+        }
+
+        if (inList) {
+            formattedLines.push(`</${listType}>`);
+        }
+
+        return formattedLines.join('');
+    }
+
+    /**
+     * Render expandable source citations box for RAG-derived responses
+     */
+    function renderCitations(citations) {
+        if (!citations || !Array.isArray(citations) || citations.length === 0) {
+            return "";
+        }
+
+        const count = citations.length;
+        const itemsHtml = citations.map(c => `
+            <div class="citation-item">
+                <div class="citation-header">
+                    <span class="citation-file">&#128196; ${escapeHtml(c.filename)}</span>
+                    <span class="citation-page">Page/Sec: ${escapeHtml(String(c.page || 1))}</span>
+                </div>
+                <div class="citation-snippet">"${escapeHtml(c.snippet || '')}"</div>
+            </div>
+        `).join("");
+
+        return `
+            <div class="citations-box">
+                <details class="citations-details">
+                    <summary class="citations-summary">
+                        <span>&#128218; Referenced ${count} section${count > 1 ? 's' : ''} from uploaded notes</span>
+                    </summary>
+                    <div class="citations-list">
+                        ${itemsHtml}
+                    </div>
+                </details>
+            </div>
+        `;
+    }
+
+    /**
+     * Append a message bubble to the chat conversation
+     */
+    function appendChatMessage(role, text, citations = [], model = "") {
+        if (!chatMessagesBox) return;
+
+        const isUser = (role === "user");
+        const msgDiv = document.createElement("div");
+        msgDiv.className = `chat-msg ${isUser ? 'user-msg' : 'assistant-msg'}`;
+
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const avatar = isUser ? '&#128100;' : '&#129302;';
+        const authorName = isUser ? 'You' : 'Study Assistant';
+
+        const formattedContent = isUser ? `<p>${escapeHtml(text)}</p>` : formatMarkdown(text);
+        const citationsHtml = (!isUser && citations && citations.length > 0) ? renderCitations(citations) : '';
+
+        msgDiv.innerHTML = `
+            <div class="msg-avatar" aria-hidden="true">${avatar}</div>
+            <div class="msg-bubble">
+                <div class="msg-author-row">
+                    <span class="msg-author">${authorName}</span>
+                    <span class="msg-time">${timeStr}</span>
+                </div>
+                <div class="msg-text">${formattedContent}</div>
+                ${citationsHtml}
+            </div>
+        `;
+
+        chatMessagesBox.appendChild(msgDiv);
+        chatMessagesBox.scrollTop = chatMessagesBox.scrollHeight;
+    }
+
+    /**
+     * Toggle chat loading state and typing indicator
+     */
+    function setChatLoading(isLoading) {
+        if (chatSendBtn) chatSendBtn.disabled = isLoading;
+        if (chatSendIcon) chatSendIcon.classList.toggle("hidden", isLoading);
+        if (chatSendSpinner) chatSendSpinner.classList.toggle("hidden", !isLoading);
+        if (chatTypingIndicator) chatTypingIndicator.classList.toggle("hidden", !isLoading);
+
+        if (isLoading && chatMessagesBox) {
+            chatMessagesBox.scrollTop = chatMessagesBox.scrollHeight;
+        }
+    }
+
+    /**
+     * Dispatch user question to /api/chat/message with multi-turn context
+     */
+    async function sendChatMessage(queryText) {
+        if (!queryText || !queryText.trim()) return;
+        const textToSend = queryText.trim();
+
+        // 1. Show user message in chat log
+        appendChatMessage("user", textToSend);
+
+        // Clear input field and reset height
+        if (chatInput) {
+            chatInput.value = "";
+            chatInput.style.height = "auto";
+        }
+
+        // 2. Set loading state
+        setChatLoading(true);
+
+        try {
+            const payload = {
+                session_id: currentChatSessionId,
+                message: textToSend,
+                prediction_context: currentPredictionContext
+            };
+
+            const response = await fetch("/api/chat/message", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json().catch(() => null);
+
+            if (!response.ok || !data || !data.success) {
+                const err = (data && data.error)
+                    ? data.error
+                    : "Unable to reach the AI Study Assistant. Please try again.";
+                appendChatMessage("assistant", `⚠️ **Notice:** ${err}`);
+                return;
+            }
+
+            // Update model badge if present
+            if (data.model && chatModelIndicator) {
+                chatModelIndicator.textContent = data.model;
+            }
+
+            // 3. Render Assistant response with citations
+            appendChatMessage("assistant", data.reply, data.citations, data.model);
+
+        } catch (networkError) {
+            console.error("Chat request failed:", networkError);
+            appendChatMessage("assistant", "⚠️ **Network Error:** Could not connect to the study service. Please verify the Flask server is running.");
+        } finally {
+            setChatLoading(false);
+        }
+    }
+
+    /**
+     * Display status message for document uploads
+     */
+    function showUploadStatus(msg, type = "info") {
+        if (!uploadStatusMsg) return;
+        uploadStatusMsg.textContent = msg;
+        uploadStatusMsg.className = `upload-status-msg ${type}`;
+        uploadStatusMsg.classList.remove("hidden");
+
+        if (type === "success") {
+            setTimeout(() => {
+                uploadStatusMsg.classList.add("hidden");
+            }, 5000);
+        }
+    }
+
+    /**
+     * Fetch and render active documents indexed for the session
+     */
+    async function loadUploadedDocuments() {
+        if (!uploadedDocsList || !uploadedDocsContainer) return;
+
+        try {
+            const res = await fetch(`/api/chat/documents?session_id=${encodeURIComponent(currentChatSessionId)}`);
+            const data = await res.json().catch(() => null);
+
+            if (!res.ok || !data || !data.success || !Array.isArray(data.documents)) {
+                return;
+            }
+
+            const docs = data.documents;
+            if (docs.length === 0) {
+                uploadedDocsContainer.classList.add("hidden");
+                uploadedDocsList.innerHTML = "";
+                return;
+            }
+
+            uploadedDocsContainer.classList.remove("hidden");
+            uploadedDocsList.innerHTML = docs.map(d => `
+                <div class="doc-pill" data-doc-id="${escapeHtml(d.doc_id)}">
+                    <span class="doc-pill-name" title="${escapeHtml(d.filename)}">&#128196; ${escapeHtml(d.filename)}</span>
+                    <span class="doc-pill-chunks">${d.chunk_count} chunk${d.chunk_count > 1 ? 's' : ''}</span>
+                    <button type="button" class="doc-pill-del" data-doc-id="${escapeHtml(d.doc_id)}" title="Remove document">&times;</button>
+                </div>
+            `).join("");
+
+            // Attach delete listeners
+            uploadedDocsList.querySelectorAll(".doc-pill-del").forEach(btn => {
+                btn.addEventListener("click", async (e) => {
+                    e.stopPropagation();
+                    const docId = btn.getAttribute("data-doc-id");
+                    if (docId) {
+                        await deleteStudyDocument(docId);
+                    }
+                });
+            });
+
+        } catch (err) {
+            console.error("Failed to load documents list:", err);
+        }
+    }
+
+    /**
+     * Delete a document from the session vector store
+     */
+    async function deleteStudyDocument(docId) {
+        try {
+            const res = await fetch(`/api/chat/documents/${encodeURIComponent(docId)}?session_id=${encodeURIComponent(currentChatSessionId)}`, {
+                method: "DELETE"
+            });
+            const data = await res.json().catch(() => null);
+            if (res.ok && data && data.success) {
+                loadUploadedDocuments();
+                appendChatMessage("assistant", `🗑️ Removed document from active study memory.`);
+            }
+        } catch (err) {
+            console.error("Failed to delete document:", err);
+        }
+    }
+
+    /**
+     * Upload and index a study file (PDF, DOCX, TXT, MD)
+     */
+    async function uploadStudyFile(file) {
+        if (!file) return;
+
+        showUploadStatus(`Uploading and parsing "${file.name}"...`, "info");
+        if (uploadProgress) uploadProgress.classList.remove("hidden");
+        if (uploadProgressFill) uploadProgressFill.style.width = "35%";
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("session_id", currentChatSessionId);
+
+        try {
+            if (uploadProgressFill) uploadProgressFill.style.width = "70%";
+            const res = await fetch("/api/chat/upload", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await res.json().catch(() => null);
+
+            if (!res.ok || !data || !data.success) {
+                const errMsg = (data && data.error) ? data.error : "Failed to upload file.";
+                showUploadStatus(`❌ ${errMsg}`, "error");
+                return;
+            }
+
+            if (uploadProgressFill) uploadProgressFill.style.width = "100%";
+            const doc = data.document;
+            showUploadStatus(`✅ Successfully indexed "${doc.filename}" (${doc.chunk_count} chunks, ${doc.char_count} chars)!`, "success");
+
+            // Post notification in chat
+            appendChatMessage("assistant", `📄 I have read and indexed **${escapeHtml(doc.filename)}** (${doc.chunk_count} chunks). Ask me questions about it, request a summary, or practice MCQs!`);
+
+            // Refresh document pills
+            loadUploadedDocuments();
+
+        } catch (err) {
+            console.error("File upload error:", err);
+            showUploadStatus("❌ Network error while uploading notes.", "error");
+        } finally {
+            setTimeout(() => {
+                if (uploadProgress) uploadProgress.classList.add("hidden");
+                if (uploadProgressFill) uploadProgressFill.style.width = "0%";
+            }, 1000);
+        }
+    }
+
+    // ========================================================================
+    // Chat & Dropzone Event Listeners
+    // ========================================================================
+
+    // Dropzone Drag & Drop
+    if (notesDropzone) {
+        notesDropzone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            notesDropzone.classList.add("dragover");
+        });
+
+        notesDropzone.addEventListener("dragleave", () => {
+            notesDropzone.classList.remove("dragover");
+        });
+
+        notesDropzone.addEventListener("drop", (e) => {
+            e.preventDefault();
+            notesDropzone.classList.remove("dragover");
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                uploadStudyFile(files[0]);
+            }
+        });
+
+        notesDropzone.addEventListener("click", () => {
+            if (notesFileInput) notesFileInput.click();
+        });
+    }
+
+    // File Input change
+    if (notesFileInput) {
+        notesFileInput.addEventListener("change", () => {
+            const files = notesFileInput.files;
+            if (files && files.length > 0) {
+                uploadStudyFile(files[0]);
+                notesFileInput.value = ""; // Reset for re-selection
+            }
+        });
+    }
+
+    // Chat Form Submit
+    if (chatForm) {
+        chatForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            if (chatInput) {
+                sendChatMessage(chatInput.value);
+            }
+        });
+    }
+
+    // Chat Textarea Enter-to-send (Shift+Enter for new line) & Auto-resize
+    if (chatInput) {
+        chatInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendChatMessage(chatInput.value);
+            }
+        });
+
+        chatInput.addEventListener("input", () => {
+            chatInput.style.height = "auto";
+            chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + "px";
+        });
+    }
+
+    // Quick Action Study Chips
+    if (quickPromptsRow) {
+        quickPromptsRow.addEventListener("click", (e) => {
+            const chip = e.target.closest(".quick-chip");
+            if (!chip) return;
+
+            let prompt = chip.getAttribute("data-prompt");
+            if (chip.id === "quickChipScore") {
+                if (currentPredictionContext) {
+                    prompt = `Explain my predicted score of ${currentPredictionContext.predicted_score}/100 and give me personalized study recommendations based on my metrics (${currentPredictionContext.study_hours} hrs study/day, ${currentPredictionContext.previous_score} previous score, ${currentPredictionContext.attendance}% attendance, and ${currentPredictionContext.assignment_score} assignment score).`;
+                } else {
+                    prompt = "How can a student optimize their study hours, attendance, and assignment consistency to reach a top exam score?";
+                }
+            }
+
+            if (prompt) {
+                sendChatMessage(prompt);
+            }
+        });
+    }
+
+    // Reset Chat / New Conversation Button
+    if (chatResetBtn) {
+        chatResetBtn.addEventListener("click", async () => {
+            try {
+                await fetch("/api/chat/reset", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ session_id: currentChatSessionId })
+                });
+
+                if (chatMessagesBox) {
+                    chatMessagesBox.innerHTML = `
+                        <div class="chat-msg assistant-msg">
+                            <div class="msg-avatar" aria-hidden="true">&#129302;</div>
+                            <div class="msg-bubble">
+                                <div class="msg-author-row">
+                                    <span class="msg-author">Study Assistant</span>
+                                    <span class="msg-time">Just now</span>
+                                </div>
+                                <div class="msg-text">
+                                    Conversation reset. How can I help you study next?
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                console.error("Failed to reset chat session:", err);
+            }
+        });
+    }
+
+    // ========================================================================
+    // 9. Initial Dashboard Hydration
     // ========================================================================
     loadStatistics();
     loadPredictionHistory();
+    loadUploadedDocuments();
 });
+
