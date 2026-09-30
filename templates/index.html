@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Score Predictor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <main class="app-container">
+        <!-- Application Header -->
+        <header class="app-header">
+            <h1 class="app-title">Student Score Predictor</h1>
+            <p class="app-subtitle">Predict your expected academic performance & track prediction history</p>
+        </header>
+
+        <!-- Prediction Input Card -->
+        <section class="card form-card" aria-labelledby="form-heading">
+            <h2 id="form-heading" class="section-title">New Student Prediction</h2>
+
+            <form id="predictionForm" novalidate>
+                <!-- Study Hours -->
+                <div class="form-group">
+                    <label for="study_hours">Daily Study Hours</label>
+                    <input 
+                        type="number" 
+                        id="study_hours" 
+                        name="study_hours" 
+                        min="0" 
+                        max="24" 
+                        step="any" 
+                        placeholder="e.g. 5" 
+                        required
+                        aria-describedby="study_hours_hint"
+                    >
+                    <span id="study_hours_hint" class="field-hint">Hours spent studying daily (0 – 24)</span>
+                </div>
+
+                <!-- Previous Score -->
+                <div class="form-group">
+                    <label for="previous_score">Previous Exam Score</label>
+                    <input 
+                        type="number" 
+                        id="previous_score" 
+                        name="previous_score" 
+                        min="0" 
+                        max="100" 
+                        step="any" 
+                        placeholder="e.g. 72" 
+                        required
+                        aria-describedby="previous_score_hint"
+                    >
+                    <span id="previous_score_hint" class="field-hint">Score from your previous exam (0 – 100)</span>
+                </div>
+
+                <!-- Attendance -->
+                <div class="form-group">
+                    <label for="attendance">Attendance Percentage</label>
+                    <input 
+                        type="number" 
+                        id="attendance" 
+                        name="attendance" 
+                        min="0" 
+                        max="100" 
+                        step="any" 
+                        placeholder="e.g. 85" 
+                        required
+                        aria-describedby="attendance_hint"
+                    >
+                    <span id="attendance_hint" class="field-hint">Class attendance rate percentage (0 – 100%)</span>
+                </div>
+
+                <!-- Assignment Score -->
+                <div class="form-group">
+                    <label for="assignment_score">Assignment Score</label>
+                    <input 
+                        type="number" 
+                        id="assignment_score" 
+                        name="assignment_score" 
+                        min="0" 
+                        max="100" 
+                        step="any" 
+                        placeholder="e.g. 80" 
+                        required
+                        aria-describedby="assignment_score_hint"
+                    >
+                    <span id="assignment_score_hint" class="field-hint">Average score on assignments (0 – 100)</span>
+                </div>
+
+                <!-- Error Display Area -->
+                <div id="errorArea" class="error-box hidden" role="alert" aria-live="assertive">
+                    <span class="error-icon" aria-hidden="true">&#9888;</span>
+                    <span id="errorMessage" class="error-text"></span>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="predictButton" class="btn-primary">
+                    <span class="btn-spinner hidden" aria-hidden="true"></span>
+                    <span id="btnText">Predict Score</span>
+                </button>
+            </form>
+        </section>
+
+        <!-- Latest Prediction Result Section -->
+        <section class="card result-card" aria-labelledby="result-heading">
+            <h2 id="result-heading" class="result-title">Latest Prediction</h2>
+            <div id="resultArea" class="result-box" aria-live="polite">
+                <p id="resultPlaceholder" class="result-placeholder">No prediction yet.<br>Enter your academic details above to get started.</p>
+                <div id="scoreDisplay" class="score-display hidden">
+                    <div class="score-number-row">
+                        <span id="scoreValue" class="result-score">--</span>
+                        <span class="score-scale">/ 100</span>
+                    </div>
+                    <div class="score-bar-wrapper" role="progressbar" id="scoreBarWrapper" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                        <div id="scoreProgressBar" class="score-bar-fill" style="width: 0%;"></div>
+                    </div>
+
+                    <!-- AI Advice Action & Display (Phase 9) -->
+                    <div class="ai-action-container">
+                        <button type="button" id="getAiAdviceBtn" class="btn-ai" title="Get personalized AI advice based on your prediction">
+                            <span class="btn-spinner hidden" id="aiBtnSpinner" aria-hidden="true"></span>
+                            <span id="aiBtnText">&#10024; Explain &amp; Get Study Advice</span>
+                        </button>
+                    </div>
+
+                    <div id="aiAdviceArea" class="ai-advice-box hidden" aria-live="polite">
+                        <div class="ai-advice-header">
+                            <span class="ai-badge">&#10024; AI Study Advice</span>
+                            <span id="aiModelBadge" class="ai-model-tag">Gemini LLM</span>
+                        </div>
+                        <div id="aiAdviceText" class="ai-advice-content"></div>
+                        <div id="aiAdviceError" class="ai-advice-error-text hidden"></div>
+                    </div>
+                </div>
+            </div>
+            <p class="phase-notice">Phase 9: AI / LLM Study Advice Active</p>
+        </section>
+
+        <!-- Dashboard Statistics Section -->
+        <section class="card stats-card" aria-labelledby="stats-heading">
+            <div class="stats-header">
+                <h2 id="stats-heading" class="stats-title">Performance Summary</h2>
+                <span id="statsStatus" class="stats-status-text">SQLite Aggregates</span>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <span class="stat-label">Total Predictions</span>
+                    <span id="statTotal" class="stat-value">0</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Average Score</span>
+                    <span id="statAverage" class="stat-value">--</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Highest Score</span>
+                    <span id="statHighest" class="stat-value">--</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Lowest Score</span>
+                    <span id="statLowest" class="stat-value">--</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Prediction History Section -->
+        <section class="card history-card" aria-labelledby="history-heading">
+            <div class="history-header">
+                <h2 id="history-heading" class="history-title">Prediction History</h2>
+                <button type="button" id="refreshHistoryBtn" class="btn-secondary" title="Refresh history from SQLite">Refresh</button>
+            </div>
+            <div id="historyContainer" class="history-container" aria-live="polite">
+                <p id="historyLoading" class="history-placeholder">Loading prediction history...</p>
+                <div id="historyTableWrapper" class="history-table-wrapper hidden">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Date & Time</th>
+                                <th scope="col">Study</th>
+                                <th scope="col">Previous</th>
+                                <th scope="col">Attendance</th>
+                                <th scope="col">Assignment</th>
+                                <th scope="col">Predicted</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <!-- Populated dynamically via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <p id="historyEmpty" class="history-placeholder hidden">No prediction history yet.<br>Make your first prediction above!</p>
+                <p id="historyError" class="history-error-text hidden">Unable to load prediction history.</p>
+            </div>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
